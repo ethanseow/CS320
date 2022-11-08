@@ -94,8 +94,15 @@ let isInteger (c : const) : bool =
   | Int _ -> true
   | String _ -> false
 
+let lengthGreaterTwo (accum) : bool =
+  List.length accum >= 2
+
 let topTwoInteger (accum : const list) : bool = 
-  not (isInteger (List.nth accum 0)) || not (isInteger (List.nth accum 1))
+  (isInteger (List.nth accum 0)) && (isInteger (List.nth accum 1))
+
+let divideByZero (accum : const list) : bool = 
+  let Int i = List.nth accum 1
+  in i != 0
 
 let popStack (accum : const list) = 
     match accum with
@@ -109,37 +116,26 @@ let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const =
   in
   (Int(f i j))
 
-
-
-let higherOrderMathCom (f : 'a -> 'b -> 'c) (b : bool) (accum : const list) : (bool * (const list)) = 
-  if List.length accum < 2
+let higherOrderMathCom (errorCheck : (const list -> bool) list) (f : 'a -> 'b -> 'c) (b : bool) (accum : const list) : (bool * (const list)) = 
+  let helper acc h = 
+    if acc = false
+      then
+        false
+    else
+      h accum
+  in
+  let passedChecks = List.fold_left helper true errorCheck
+  in
+  if passedChecks = false
     then
       error
   else
-      if topTwoInteger accum
-        then
-          error
-      else    
         let (one,two) = (List.nth accum 0, List.nth accum 1)
         in
         let a = popStack (popStack accum)
         in
         (b, ((higherOrderOp f one two)::a))
 
-let div (b : bool) (accum : const list) : (bool * const list) = 
-  if List.length accum < 2
-    then
-      error
-  else
-      if topTwoInteger accum
-        then
-          error
-      else
-        if (List.nth accum 1 = Int(0))
-          then
-            error
-        else
-          higherOrderMathCom (/) b accum
 let pop (b : bool) (accum : const list) : (bool * (const list)) =
   if List.length accum < 1
     then
@@ -158,10 +154,10 @@ let interpret (acc : (bool * (const list))) (comm : com) : (bool * (const list))
     | Quit -> (true,accum)
     | Push v -> (b,v::accum)
     | Pop -> pop b accum
-    | Add -> higherOrderMathCom (+) b accum
-    | Sub -> higherOrderMathCom (-) b accum
-    | Mul -> higherOrderMathCom ( * ) b accum
-    | Div -> div b accum
+    | Add -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) (+) b accum
+    | Sub -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) (-) b accum
+    | Mul -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) ( * ) b accum
+    | Div -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::divideByZero::[]) (/) b accum
     | _ -> acc
 
 let interpreter (src : string) (output_file_path: string): unit =

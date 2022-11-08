@@ -79,3 +79,8 @@ Sub
 Push 10
 Div
 Quit";;
+
+let o = "Push \"samosa\"
+Push 10
+Div
+Quit";;
