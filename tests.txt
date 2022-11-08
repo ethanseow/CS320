@@ -1,0 +1,81 @@
+base
+let a = "Push 3\nPush 4\nPush 5\nPop\nAdd\nConcat\nQuit\nQuit\nQuit\nPush \"3\""
+
+push
+let b = "Push 12\nPush \"abc\"\nPush -6\nPush \"\"\nQuit";;
+
+pop
+let c = "Push 33
+Push \"\"
+Push \"a\"
+Pop
+Quit";;
+
+let d = "Push 5
+Pop
+Pop
+Quit";;
+
+
+add
+let e = "Push 5
+Push 7
+Add
+Push 3
+Add
+Quit";;
+
+let f = "Push \"hello\"
+Add
+Quit";;
+
+
+let g = "Push \"bottle\"
+Push \"water\"
+Add
+Quit";;
+
+sub
+let h = "Push \"test\"
+Push 1
+Push 10
+Sub
+Quit"
+
+let i = "Push \"test\"
+Push 1
+Push 3
+Push 4
+Push 10
+Sub
+Quit";;
+
+let j = "Push \"choco\"
+Push 10
+Sub
+Quit"
+
+mul 
+let k = "Push 5
+Push 7
+Mul
+Quit";;
+
+
+let l = "Push 2
+Push \"laddoo\"
+Mul
+Quit";;
+
+div
+let m = "Push 2
+Push 10
+Div
+Quit";;
+
+let n = "Push 5
+Push 5
+Sub
+Push 10
+Div
+Quit";;

@@ -13,6 +13,7 @@
    related problem. *)
 
 (*NOTE: There are no restrictions on what you can use*)
+#load "str.cma";;
 type const = 
   | Int of int
   | String of string
@@ -21,6 +22,11 @@ type com =
   | Push of const
   | Pop
   | Add
+  | Sub
+  | Mul
+  | Div
+  | Swap
+  | Neg
   | Concat
 
 let regexp = Str.regexp "[0-9]+$"
@@ -44,6 +50,12 @@ let stringToCom (inp : string list) : com =
     Push(v)
   | "Pop" -> Pop
   | "Add" -> Add
+  | "Concat" -> Concat
+  | "Sub" -> Sub
+  | "Mul" -> Mul
+  | "Div" -> Div
+  | "Swap" -> Swap
+  | "Neg" -> Neg
   | "Concat" -> Concat
 
 let srcToCom (src : string) : com list = 
@@ -75,6 +87,66 @@ let printToFile (inp : string list) (file_path : string) : unit =
   See String.get. These are suggestions though and you are welcome
   to use what you want :)  *)
 
+let error = (true, (String("\"Error\""))::[])
+
+let isInteger (c : const) : bool = 
+  match c with
+  | Int _ -> true
+  | String _ -> false
+
+let topTwoInteger (accum : const list) : bool = 
+  not (isInteger (List.nth accum 0)) || not (isInteger (List.nth accum 1))
+
+let popStack (accum : const list) = 
+    match accum with
+      | [] -> [] 
+      | _::t -> t
+
+let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const = 
+  let Int i = a
+  in
+  let Int j = b
+  in
+  (Int(f i j))
+
+
+
+let higherOrderMathCom (f : 'a -> 'b -> 'c) (b : bool) (accum : const list) : (bool * (const list)) = 
+  if List.length accum < 2
+    then
+      error
+  else
+      if topTwoInteger accum
+        then
+          error
+      else    
+        let (one,two) = (List.nth accum 0, List.nth accum 1)
+        in
+        let a = popStack (popStack accum)
+        in
+        (b, ((higherOrderOp f one two)::a))
+
+let div (b : bool) (accum : const list) : (bool * const list) = 
+  if List.length accum < 2
+    then
+      error
+  else
+      if topTwoInteger accum
+        then
+          error
+      else
+        if (List.nth accum 1 = Int(0))
+          then
+            error
+        else
+          higherOrderMathCom (/) b accum
+let pop (b : bool) (accum : const list) : (bool * (const list)) =
+  if List.length accum < 1
+    then
+      error
+  else
+    (b,(popStack accum))
+
 let interpret (acc : (bool * (const list))) (comm : com) : (bool * (const list)) = 
   let (b, accum) = acc
   in
@@ -85,6 +157,11 @@ let interpret (acc : (bool * (const list))) (comm : com) : (bool * (const list))
     match comm with
     | Quit -> (true,accum)
     | Push v -> (b,v::accum)
+    | Pop -> pop b accum
+    | Add -> higherOrderMathCom (+) b accum
+    | Sub -> higherOrderMathCom (-) b accum
+    | Mul -> higherOrderMathCom ( * ) b accum
+    | Div -> div b accum
     | _ -> acc
 
 let interpreter (src : string) (output_file_path: string): unit =
@@ -96,6 +173,6 @@ let interpreter (src : string) (output_file_path: string): unit =
     then
       let s = constListToString acc
       in
-      printToFile s "bungus"
+      printToFile s output_file_path
   else
     ()
