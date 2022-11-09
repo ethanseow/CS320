@@ -84,3 +84,50 @@ let o = "Push \"samosa\"
 Push 10
 Div
 Quit";;
+
+swap
+let p = "Push \"hello\"
+Push \"world\"
+Swap
+Quit";;
+
+let q = "Push \"320\"
+Push \"cas\"
+Push \"cs\"
+Swap
+Quit";;
+
+let r = "Push 917
+Push 863
+Swap
+Neg
+Add
+Push -31
+Mul
+Push 79
+Push \"foo\"
+Pop
+Push 674
+Sub
+Push \"baz\"
+Pop
+Push 20
+Swap
+Div
+Push -1
+Mul
+Quit";;
+
+let s = "Push \"interpreter\"
+Push \"O\"
+Push \"Caml\"
+Swap
+Concat
+Concat
+Push \"code\"
+Swap
+Concat
+Push 913
+Quit
+Push 42
+Push 1097";;

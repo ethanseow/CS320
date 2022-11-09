@@ -13,7 +13,7 @@
    related problem. *)
 
 (*NOTE: There are no restrictions on what you can use*)
-#load "str.cma";;
+(*#load "str.cma";;*)
 type const = 
   | Int of int
   | String of string
@@ -29,7 +29,8 @@ type com =
   | Neg
   | Concat
 
-let regexp = Str.regexp "[0-9]+$"
+let regexp = Str.regexp "[-0-9]+$"
+let regexp2 = Str.regexp "[\\\"A-Za-z]+$"
 let stringToConst (str : string ) : const =
   if Str.string_match regexp str 0
     then
@@ -37,7 +38,11 @@ let stringToConst (str : string ) : const =
       in
       Int(x)
   else
-    String(str)
+    if Str.string_match regexp2 str 0
+      then
+        String(str)
+    else
+      String("error")
 
 let stringToCom (inp : string list) : com =
   let comm = List.nth inp 0
@@ -143,6 +148,54 @@ let pop (b : bool) (accum : const list) : (bool * (const list)) =
   else
     (b,(popStack accum))
 
+let swap (b : bool) (accum : const list) : (bool * (const list)) =
+  if List.length accum < 2
+    then
+      error
+  else
+    let one = List.nth accum 0
+    in
+    let two = List.nth accum 1
+    in
+    let a = popStack (popStack accum)
+    in
+    (b, two::one::a)
+
+let neg (b : bool) (accum : const list) : (bool * (const list)) =
+    if List.length accum < 1
+      then
+      error
+    else
+      if isInteger (List.nth accum 0) = false
+        then
+          error
+      else
+        let Int i = List.nth accum 0
+        in
+        let a = popStack accum
+        in
+        (b, (Int(-1 * i))::a)
+
+let concat (b : bool) (accum : const list) : (bool * (const list)) =
+    if List.length accum < 2
+      then
+      error
+    else
+      if topTwoInteger accum = true
+        then
+          error
+      else
+        let String i = List.nth accum 0
+        in
+        let String j = List.nth accum 1
+        in
+        let a = popStack (popStack accum)
+        in
+        let removeQuotes (str : string) : string = 
+          Str.(global_replace (regexp "\"") "" str)
+        in
+        (b, (String("\"" ^ removeQuotes (i ^ j) ^ "\""))::a)
+
 let interpret (acc : (bool * (const list))) (comm : com) : (bool * (const list)) = 
   let (b, accum) = acc
   in
@@ -152,12 +205,26 @@ let interpret (acc : (bool * (const list))) (comm : com) : (bool * (const list))
   else
     match comm with
     | Quit -> (true,accum)
-    | Push v -> (b,v::accum)
+    | Push v -> 
+      if isInteger v
+        then
+        (b,v::accum)
+      else
+        let String a = v
+        in
+        if a = "error"
+          then
+          error
+        else
+          (b,v::accum)
     | Pop -> pop b accum
     | Add -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) (+) b accum
     | Sub -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) (-) b accum
     | Mul -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) ( * ) b accum
     | Div -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::divideByZero::[]) (/) b accum
+    | Swap -> swap b accum
+    | Concat -> concat b accum
+    | Neg -> neg b accum
     | _ -> acc
 
 let interpreter (src : string) (output_file_path: string): unit =
