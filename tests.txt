@@ -131,3 +131,14 @@ Push 913
 Quit
 Push 42
 Push 1097";;
+
+
+variables test
+let t = 
+"Push 3
+Local x
+Push x
+Local y
+Push x
+Push y
+Quit";;
