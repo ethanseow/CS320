@@ -241,30 +241,17 @@ let interpret (acc : (bool * (const list))) (comm : com) : (bool * (const list))
     | Concat -> concat b accum
     | Neg -> neg b accum
     | _ -> acc
-
-
-
-
-let (@@) (f : 'a -> 'b) (a : 'a): 'b =
-  f a
-
-let (|>) (a : 'a) (f : 'a -> 'b): 'b =
-  f a
-
-  
-type env =
- (string * const) list list
-
-type stack = const list
-
-
-type program = (stack * env)
 type ('a, 'e) result =
   | Ok of 'a
   | Err of 'e
-
 let ok  (res : 'a): ('a, 'e) result = Ok(res)
 let err (err : 'e): ('a, 'e) result = Err(err)
+type env = (string * const) list list
+type stack = const list
+type program = stack * env
+type parse_err =
+  | PI
+type result_out = ((com list) * program)
 let fold_result (f : 'a -> 'b) (g : 'e -> 'b) (res : ('a, 'e) result): 'b =
   match res with
   | Ok(o) -> f o
@@ -273,129 +260,76 @@ let fold_result (f : 'a -> 'b) (g : 'e -> 'b) (res : ('a, 'e) result): 'b =
 let and_then (f : 'a -> ('b, 'e) result) (res : ('a, 'e) result): ('b, 'e) result =
   fold_result f err res
 
-type parse_error =
-  | DivideByZero
-  | UnmatchedBegin
-  | EmptyStack
-  | WrongDatatype
-  | Place
-
-let global (x : string) (p : program) : (program, parse_error) result =
-  let (stack, e) = p
+let findGlobalVar (x : string) (e : env) =
+  let glo = List.hd e
   in
-  let glob = List.hd e
-  in
-  if List.length stack <= 0
-    then
-      err(Place)
-  else
-    let value = List.hd stack
-    in
-    let tup = (x, value)
-    in
-    let newP = (List.tl stack, (tup::glob)::(List.tl e))
-    in
-    ok(newP)
+  List.assoc_opt x glo
 
-(*   
-let findVar (acc : option) (l : (string * const) list) = 
-  match acc with
-  | None -> List.assoc_opt x l
-  | _ -> acc
-in
-let v = List.fold_left findVar l None
-*)
-let push (h: const) (t :com list) (p : program) = 
-  let (stk, e) = p
-  in
-  match h with
-  | Var vr -> 
-    let findVar (acc : const option) (l : (string * const) list) = 
-    match acc with
-      | None -> List.assoc_opt vr l
-      | _ -> acc
-    in
-    let v = List.fold_left findVar None (List.rev e)
-    in
-    (match v with
-    | Some s -> ok(((s::stk,e),t))
-    | _ -> err(Place))
-  | _ -> ok(((h::stk,e),t))
-
-
-
-let local (x : string) (p : program) : (program, parse_error) result =
-  let (stack, e) = p
-  in
-  if List.length stack <= 0
-    then
-      err(Place)
-  else
-    let loc = List.hd (List.rev e)
-    in
-    let value = List.hd stack
-    in
-    let tup = (x, value)
-    in
-    let newP = (List.tl stack, (tup::loc)::(List.tl e))
-    in
-    ok(newP)
-(*
-let rec parse_sexpr (st : com list) (p : program) : (program * (com list) , parse_error) result = 
-    let h = List.hd st
-    in
-    let t = List.tl st
-    in
-    let (_,e) = p
-    in
-    match h with
-    | Quit -> err(Place)
-    | Begin -> parse_sexpr_list st ([],e) |> and_then @@ fun (newP, newT) -> 
-      ok((newP,newT))
-    | End -> err(Place)
-    | Push(x) -> push x t p
-    | Global(x) -> (global x p) |> and_then @@ fun newP -> ok((newP,t))
-    | Local(x) -> local x p |> and_then @@ fun newP -> ok((newP,t))
-    | _ -> err(Place)
-  and parse_sexpr_list (st : com list) (p : program) : (program * (com list), parse_error) result =
-      let h = List.hd st
+let updateEnv (vari : string) (toChange : const) (e : env) (index : int) : env = 
+    let (_, newEnv) = List.fold_left (fun acc h -> 
+      let (i,newEnv) = acc
       in
-      match h with
-      | End -> ok((p,List.tl st))
-      | _ -> parse_sexpr st p
-         |> and_then @@ fun (fst, st') ->
-         parse_sexpr_list st'
-         |> and_then @@ fun (rst, st'') ->
-         ok (fst::rst, st'')
-
-let parse (st : com list): (const list, parse_error) result =
-  let rec parse_all st (p : program) =
-    match st with
-    | _ -> err(Place)
-    | h::t ->
-      match h with
-      | Quit -> 
-        let (stack, _) = p
-        in
-        ok @@ stack
-      | _   -> parse_sexpr t p
-                |> and_then @@ fun (newP, ts) ->
-              parse_all ts newP
+      if i = index
+        then
+          let newH = (vari, toChange)::(List.remove_assoc vari h)
+          in
+          (i+1,newH::newEnv)
+      else
+        (i+1,h::newEnv)
+    ) (0, []) e
     in
-  parse_all st ([], [[]])
+    (List.rev newEnv)
 
-*)
+let global (tl : com list) (v : const) (p : program) : (result_out, parse_err) result = 
+  let (st, e) = p
+  in
+  let Var vari = v
+  in
+  match st with
+  | [] -> err(PI)
+  | topStack::restStack ->
+    let newEnv = updateEnv vari topStack e 0
+    in 
+    let newProgram = (restStack, newEnv)
+    in
+    ok((tl,newProgram))
+let local (tl : com list) (v : const) (p : program) : (result_out, parse_err) result = 
+  let (st, e) = p
+  in
+  let Var vari = v
+  in
+  match st with
+  | [] -> err(PI)
+  | topStack::restStack ->
+    let newEnv = updateEnv vari topStack e ((List.length e) - 1)
+    in 
+    let newProgram = (restStack, newEnv)
+    in
+    ok((tl,newProgram))
+let execCom (cl : com list) (p : program) : (result_out, parse_err) result = 
+  let nextCom = List.hd cl
+  in
+  let tl = List.tl cl
+  in
+  match nextCom with 
+    (*
+  | Push p -> 
+  | Begin ->
+  | End ->
+  | Local l -> 
+    *)
+  | Global g -> global tl g p
 
-
-
-
-
-
-
-
-
-
-
+let parse (commList : com list) = 
+  let rec parse_all (cl : com list) (p : program) = 
+    let nextCom = List.hd cl
+    in
+    match nextCom with
+    | Quit -> ok((cl,p))
+    | _ -> (execCom cl p) |> and_then @@ (fun (newCl, newP) ->
+      parse_all newCl newP) 
+  in
+  parse_all [] ([], [[]])
 
 let interpreter (src : string) (output_file_path: string): unit =
   let commList = srcToCom src

@@ -134,11 +134,18 @@ Push 1097";;
 
 
 variables test
-let t = 
-"Push 3
-Local x
+let q = "Push \"320\"
+Push \"cas\"
+Push \"cs\"
 Push x
-Local y
-Push x
-Push y
+Push 3
+Swap
 Quit";;
+
+let p : program = ([Int 3; Int 4; Int 5],
+ [[("x", String "bob"); ("y", Int 2); ("z", Int 3)]; []]);;
+
+global [] (Var("x")) p;;
+
+let p2 : program = ([Int 3; Int 4; Int 5],
+ [[("y", Int 2); ("z", Int 3)]; []]);; 
