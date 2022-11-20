@@ -265,6 +265,11 @@ let findGlobalVar (x : string) (e : env) =
   in
   List.assoc_opt x glo
 
+let findVar (x: string) (e : env) (i : int) = 
+  let currEnv = (List.nth e i)
+  in
+  List.assoc_opt x currEnv
+
 let updateEnv (vari : string) (toChange : const) (e : env) (index : int) : env = 
     let (_, newEnv) = List.fold_left (fun acc h -> 
       let (i,newEnv) = acc
@@ -293,6 +298,7 @@ let global (tl : com list) (v : const) (p : program) : (result_out, parse_err) r
     let newProgram = (restStack, newEnv)
     in
     ok((tl,newProgram))
+
 let local (tl : com list) (v : const) (p : program) : (result_out, parse_err) result = 
   let (st, e) = p
   in
@@ -306,6 +312,63 @@ let local (tl : com list) (v : const) (p : program) : (result_out, parse_err) re
     let newProgram = (restStack, newEnv)
     in
     ok((tl,newProgram))
+
+let add (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp (+) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+
+  else
+    err(PI)
+
+let push (x : const) (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st, e) = p
+  in
+  match x with
+  | String s -> 
+    if s = "error"
+      then
+        err(PI)
+    else
+      let newStack = (x::st)
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  | Int i -> 
+      let newStack = (x::st)
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  | Var v -> 
+      (
+      let n = (List.length e) - 1
+      in
+      let rec trav (i : int) (e : env) = 
+        if i < 0
+          then
+            None
+        else
+          match findVar v e i with
+          | None -> trav (i-1) e
+          | Some x -> (Some(x))
+      in
+      match trav n e with
+      | None -> err(PI)
+      | Some x -> ok( (tl ,((x::st),e)) )
+      )
+
 let execCom (cl : com list) (p : program) : (result_out, parse_err) result = 
   let nextCom = List.hd cl
   in
@@ -319,21 +382,36 @@ let execCom (cl : com list) (p : program) : (result_out, parse_err) result =
   | Local l -> 
     *)
   | Global g -> global tl g p
+  | Local l -> local tl l p
+  | Push x -> push x tl p
+  | Add -> add tl p
 
 let parse (commList : com list) = 
   let rec parse_all (cl : com list) (p : program) = 
     let nextCom = List.hd cl
     in
     match nextCom with
-    | Quit -> ok((cl,p))
+    | Quit -> 
+      let (st,e) = p
+      in
+      ok(st)
     | _ -> (execCom cl p) |> and_then @@ (fun (newCl, newP) ->
       parse_all newCl newP) 
   in
-  parse_all [] ([], [[]])
+  parse_all commList ([], ([]::[]::[]))
 
 let interpreter (src : string) (output_file_path: string): unit =
   let commList = srcToCom src
   in
+  let outp = parse commList
+  in
+  match outp with
+  | Err _ -> printToFile (("\"Error\"")::[]) output_file_path
+  | Ok st -> 
+    let strStk = constListToString st
+    in
+    printToFile strStk output_file_path
+  (*
   let (b,acc) = List.fold_left interpret  (false,[]) commList
   in
   if b == true
@@ -343,3 +421,4 @@ let interpreter (src : string) (output_file_path: string): unit =
       printToFile s output_file_path
   else
     ()
+  *)

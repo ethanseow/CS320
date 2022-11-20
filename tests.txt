@@ -149,3 +149,36 @@ global [] (Var("x")) p;;
 
 let p2 : program = ([Int 3; Int 4; Int 5],
  [[("y", Int 2); ("z", Int 3)]; []]);; 
+
+
+let z = 
+"Push 3
+Local x
+Push x
+Local y
+Push x
+Push y
+Quit";;
+
+let za = "Push 3
+Local x
+Quit";;
+
+let zb = "Push 2
+Local x
+Push x
+Push 3
+Local x
+Push x
+Add
+Push x
+Quit";;
+
+let zc = "Push 2
+Local x
+Push x
+Push 1
+Add
+Global x
+Push x
+Quit";;
