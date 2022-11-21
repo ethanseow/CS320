@@ -154,6 +154,15 @@ let divideByZero (accum : const list) : bool =
   let Int i = List.nth accum 1
   in i != 0
 
+let topTwoBoolean (accum : const list) = 
+  if topTwoInteger accum
+    then
+      let (Int i,Int j) = (List.nth accum 0, List.nth accum 1)
+      in
+      (i = 0 || i = 1) && (j = 0 || j = 1)
+  else
+    false
+
 (*
   Command functions   
 *)
@@ -168,6 +177,12 @@ let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const =
   let Int j = b
   in
   (Int(f i j))
+
+let bool_of_int (i: int) = 
+  bool_of_string (string_of_int i)
+
+let int_of_bool (b : bool) =
+  if b then 1 else 0
 
 let pop (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st,e) = p
@@ -295,7 +310,7 @@ let local (tl : com list) (v : const) (p : program) : (result_out, parse_err) re
     in
     ok((tl,newProgram))
 
-let divide (tl : com list) (p : program) : (result_out, parse_err) result = 
+let div (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st,e) = p
   in
   if lengthGreaterTwo st && topTwoInteger st && divideByZero st
@@ -304,7 +319,7 @@ let divide (tl : com list) (p : program) : (result_out, parse_err) result =
       in
       let a = popStack (popStack st)
       in
-      let newStack = (higherOrderOp ( * ) one two)::a
+      let newStack = (higherOrderOp ( / ) one two)::a
       in
       let newProgram = (newStack, e)
       in
@@ -312,7 +327,7 @@ let divide (tl : com list) (p : program) : (result_out, parse_err) result =
   else
     err(PI)
 
-let multiply (tl : com list) (p : program) : (result_out, parse_err) result = 
+let mul (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st,e) = p
   in
   if lengthGreaterTwo st && topTwoInteger st
@@ -329,7 +344,7 @@ let multiply (tl : com list) (p : program) : (result_out, parse_err) result =
   else
     err(PI)
 
-let subtract (tl : com list) (p : program) : (result_out, parse_err) result = 
+let sub (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st,e) = p
   in
   if lengthGreaterTwo st && topTwoInteger st
@@ -362,6 +377,30 @@ let add (tl : com list) (p : program) : (result_out, parse_err) result =
       ok((tl,newProgram))
   else
     err(PI)
+
+let andF (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoBoolean st
+    then
+      let (Int i,Int j) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let b1 = bool_of_int i
+      in
+      let b2 = bool_of_int j
+      in
+      let res = Int(int_of_bool (b1 && b2))
+      in
+      let newStack = res::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
+
 
 let push (x : const) (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st, e) = p
@@ -400,22 +439,24 @@ let push (x : const) (tl : com list) (p : program) : (result_out, parse_err) res
       | None -> err(PI)
       | Some x -> ok( (tl ,((x::st),e)) )
       )
+
 let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result = 
   let nextCom = List.hd cl
   in
   let tl = List.tl cl
   in
   match nextCom with 
-    (*
-  | Push p -> 
-  | Begin ->
-  | End ->
-  | Local l -> 
-    *)
   | Global g -> global tl g p
   | Local l -> local tl l p
   | Push x -> push x tl p
   | Add -> add tl p
+  | Sub -> sub tl p
+  | Div -> div tl p
+  | Mul -> mul tl p
+  | Neg -> neg tl p
+  | Swap -> swap tl p
+  | Concat -> concat tl p
+  | Pop -> pop tl p
   | Begin ->
     let (st,e) = p
     in

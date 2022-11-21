@@ -128,9 +128,16 @@ Push \"code\"
 Swap
 Concat
 Push 913
-Quit
 Push 42
-Push 1097";;
+Push 1097
+Add
+Push 2278
+Div
+Push 5
+Mul
+Neg
+Push 8
+Quit";;
 
 
 variables test
