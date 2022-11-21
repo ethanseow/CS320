@@ -13,7 +13,7 @@
    related problem. *)
 
 (*NOTE: There are no restrictions on what you can use*)
-#load "str.cma";;
+(*#load "str.cma";;*)
 
 (*
   Init Types   
@@ -43,6 +43,7 @@ type com =
   | Lte
   | Ifthen
   | Else
+  | Equal
 type ('a, 'e) result =
   | Ok of 'a
   | Err of 'e
@@ -119,6 +120,7 @@ let stringToCom (inp : string list) : com =
   | "Or" -> Or
   | "Lte" -> Lte
   | "Not" -> Not
+  | "Equal" -> Equal
 
 let printToFile (inp : string list) (file_path : string) : unit = 
   let fp = open_out file_path in
@@ -454,7 +456,7 @@ let orF (tl : com list) (p : program) : (result_out, parse_err) result =
 let notF (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st,e) = p
   in
-  if List.length st > 1 && topOneBoolean st
+  if List.length st >= 1 && topOneBoolean st
     then
       let Int i = List.nth st 0
       in
@@ -575,6 +577,10 @@ let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result =
   | Concat -> concat tl p
   | Pop -> pop tl p
   | And -> andF tl p
+  | Or -> orF tl p
+  | Lte -> lteF tl p
+  | Equal -> equalF tl p
+  | Not -> notF tl p
   | Begin ->
     let (st,e) = p
     in
