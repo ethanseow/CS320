@@ -37,6 +37,12 @@ type com =
   | End
   | Global of const
   | Local of const
+  | And
+  | Or
+  | Not
+  | Lte
+  | Ifthen
+  | Else
 type ('a, 'e) result =
   | Ok of 'a
   | Err of 'e
@@ -107,6 +113,12 @@ let stringToCom (inp : string list) : com =
   | "Concat" -> Concat
   | "Begin" -> Begin
   | "End" -> End
+  | "Ifthen" -> Ifthen
+  | "Else" -> Else
+  | "And" -> And
+  | "Or" -> Or
+  | "Lte" -> Lte
+  | "Not" -> Not
 
 let printToFile (inp : string list) (file_path : string) : unit = 
   let fp = open_out file_path in
@@ -163,6 +175,18 @@ let topTwoBoolean (accum : const list) =
   else
     false
 
+let topOneBoolean st =
+  let hd = List.nth st 0
+  in
+  match hd with
+  | Int i ->
+    if i = 0 || i = 1
+      then
+        true
+      else
+        false
+  | _ -> false
+
 (*
   Command functions   
 *)
@@ -171,6 +195,8 @@ let popStack (accum : stack) =
       | [] -> [] 
       | _::t -> t
 
+
+
 let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const = 
   let Int i = a
   in
@@ -178,12 +204,21 @@ let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const =
   in
   (Int(f i j))
 
+let bool_of_string (s : string) = 
+  if s = "1" then true else false
 let bool_of_int (i: int) = 
   bool_of_string (string_of_int i)
 
 let int_of_bool (b : bool) =
   if b then 1 else 0
-
+let bool_op (f : 'a -> 'b -> 'c) (a : const) (b : const) : const = 
+    let (Int i,Int j) = (a,b)
+    in
+    let b1 = bool_of_int i
+    in
+    let b2 = bool_of_int j
+    in
+    Int(int_of_bool (f b1  b2))
 let pop (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st,e) = p
   in
@@ -383,15 +418,51 @@ let andF (tl : com list) (p : program) : (result_out, parse_err) result =
   in
   if lengthGreaterTwo st && topTwoBoolean st
     then
-      let (Int i,Int j) = (List.nth st 0, List.nth st 1)
+      let (a,b) = (List.nth st 0, List.nth st 1)
       in
-      let a = popStack (popStack st)
+      let a2 = popStack (popStack st)
+      in
+      let res = bool_op (&&) a b 
+      in
+      let newStack = res::a2
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
+
+let orF (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoBoolean st
+    then
+      let (a,b) = (List.nth st 0, List.nth st 1)
+      in
+      let a2 = popStack (popStack st)
+      in
+      let res = bool_op (||) a b 
+      in
+      let newStack = res::a2
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
+
+let notF (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if List.length st > 1 && topOneBoolean st
+    then
+      let Int i = List.nth st 0
+      in
+      let a = popStack st
       in
       let b1 = bool_of_int i
       in
-      let b2 = bool_of_int j
-      in
-      let res = Int(int_of_bool (b1 && b2))
+      let res = Int(int_of_bool (not b1))
       in
       let newStack = res::a
       in
@@ -400,7 +471,53 @@ let andF (tl : com list) (p : program) : (result_out, parse_err) result =
       ok((tl,newProgram))
   else
     err(PI)
+let lteF (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( 
+        fun a b ->
+          if a <= b
+            then
+            int_of_bool(true)
+          else
+          int_of_bool(false)
+      ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
 
+let equalF (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( 
+        fun a b ->
+          if a = b
+            then
+            int_of_bool(true)
+          else
+          int_of_bool(false)
+      ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
 
 let push (x : const) (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st, e) = p
@@ -457,6 +574,7 @@ let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result =
   | Swap -> swap tl p
   | Concat -> concat tl p
   | Pop -> pop tl p
+  | And -> andF tl p
   | Begin ->
     let (st,e) = p
     in
