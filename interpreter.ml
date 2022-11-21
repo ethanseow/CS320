@@ -14,6 +14,10 @@
 
 (*NOTE: There are no restrictions on what you can use*)
 #load "str.cma";;
+
+(*
+  Init Types   
+*)
 type const = 
   | Int of int
   | String of string
@@ -33,7 +37,28 @@ type com =
   | End
   | Global of const
   | Local of const
+type ('a, 'e) result =
+  | Ok of 'a
+  | Err of 'e
+let ok  (res : 'a): ('a, 'e) result = Ok(res)
+let err (err : 'e): ('a, 'e) result = Err(err)
+type env = (string * const) list list
+type stack = const list
+type program = stack * env
+type parse_err =
+  | PI
+type result_out = ((com list) * program)
+let fold_result (f : 'a -> 'b) (g : 'e -> 'b) (res : ('a, 'e) result): 'b =
+  match res with
+  | Ok(o) -> f o
+  | Err(e) -> g e
 
+let and_then (f : 'a -> ('b, 'e) result) (res : ('a, 'e) result): ('b, 'e) result =
+  fold_result f err res
+
+(*
+  Command Parser Utils   
+*)
 let regexp = Str.regexp "[-0-9]+$"
 let regexp2 = Str.regexp "\\\"[A-Za-z]+\\\"$"
 let regexp3 = Str.regexp "[a-z]+$"
@@ -108,8 +133,9 @@ let constListToString (c : const list) : string list =
   in
   List.map helper c
 
-let error = (true, (String("\"Error\""))::[])
-
+(*
+  Error checks   
+*)
 let isInteger (c : const) : bool = 
   match c with
   | Int _ -> true
@@ -118,6 +144,9 @@ let isInteger (c : const) : bool =
 let lengthGreaterTwo (accum) : bool =
   List.length accum >= 2
 
+let stackHasElem (st) : bool = 
+  List.length st >= 1 
+
 let topTwoInteger (accum : const list) : bool = 
   (isInteger (List.nth accum 0)) && (isInteger (List.nth accum 1))
 
@@ -125,7 +154,10 @@ let divideByZero (accum : const list) : bool =
   let Int i = List.nth accum 1
   in i != 0
 
-let popStack (accum : const list) = 
+(*
+  Command functions   
+*)
+let popStack (accum : stack) = 
     match accum with
       | [] -> [] 
       | _::t -> t
@@ -137,130 +169,78 @@ let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const =
   in
   (Int(f i j))
 
-let higherOrderMathCom (errorCheck : (const list -> bool) list) (f : 'a -> 'b -> 'c) (b : bool) (accum : const list) : (bool * (const list)) = 
-  let helper acc h = 
-    if acc = false
-      then
-        false
-    else
-      h accum
+let pop (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
   in
-  let passedChecks = List.fold_left helper true errorCheck
+  if stackHasElem st
+    then
+      let a = (popStack st)
+      in
+      let newStack = a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
+
+let swap (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
   in
-  if passedChecks = false
+  if lengthGreaterTwo st
     then
-      error
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = two::one::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
   else
-        let (one,two) = (List.nth accum 0, List.nth accum 1)
-        in
-        let a = popStack (popStack accum)
-        in
-        (b, ((higherOrderOp f one two)::a))
+    err(PI)
 
-let pop (b : bool) (accum : const list) : (bool * (const list)) =
-  if List.length accum < 1
-    then
-      error
-  else
-    (b,(popStack accum))
-
-let swap (b : bool) (accum : const list) : (bool * (const list)) =
-  if List.length accum < 2
-    then
-      error
-  else
-    let one = List.nth accum 0
-    in
-    let two = List.nth accum 1
-    in
-    let a = popStack (popStack accum)
-    in
-    (b, two::one::a)
-
-let neg (b : bool) (accum : const list) : (bool * (const list)) =
-    if List.length accum < 1
-      then
-      error
-    else
-      if isInteger (List.nth accum 0) = false
-        then
-          error
-      else
-        let Int i = List.nth accum 0
-        in
-        let a = popStack accum
-        in
-        (b, (Int(-1 * i))::a)
-
-let concat (b : bool) (accum : const list) : (bool * (const list)) =
-    if List.length accum < 2
-      then
-      error
-    else
-      if topTwoInteger accum = true
-        then
-          error
-      else
-        let String i = List.nth accum 0
-        in
-        let String j = List.nth accum 1
-        in
-        let a = popStack (popStack accum)
-        in
-        let removeQuotes (str : string) : string = 
-          Str.(global_replace (regexp "\"") "" str)
-        in
-        (b, (String("\"" ^ removeQuotes (i ^ j) ^ "\""))::a)
-
-
-let interpret (acc : (bool * (const list))) (comm : com) : (bool * (const list)) = 
-  let (b, accum) = acc
+let neg (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
   in
-  if b == true
+  if isInteger (List.nth st 0) = true && stackHasElem st
     then
-      acc
+      let Int i = List.nth st 0
+      in
+      let a = popStack st
+      in
+      let newStack = (Int(-1 * i))::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
   else
-    match comm with
-    | Quit -> (true,accum)
-    | Push v -> 
-      if isInteger v
-        then
-        (b,v::accum)
-      else
-        let String a = v
-        in
-        if a = "error"
-          then
-          error
-        else
-          (b,v::accum)
-    | Pop -> pop b accum
-    | Add -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) (+) b accum
-    | Sub -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) (-) b accum
-    | Mul -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::[]) ( * ) b accum
-    | Div -> higherOrderMathCom (lengthGreaterTwo::topTwoInteger::divideByZero::[]) (/) b accum
-    | Swap -> swap b accum
-    | Concat -> concat b accum
-    | Neg -> neg b accum
-    | _ -> acc
-type ('a, 'e) result =
-  | Ok of 'a
-  | Err of 'e
-let ok  (res : 'a): ('a, 'e) result = Ok(res)
-let err (err : 'e): ('a, 'e) result = Err(err)
-type env = (string * const) list list
-type stack = const list
-type program = stack * env
-type parse_err =
-  | PI
-type result_out = ((com list) * program)
-let fold_result (f : 'a -> 'b) (g : 'e -> 'b) (res : ('a, 'e) result): 'b =
-  match res with
-  | Ok(o) -> f o
-  | Err(e) -> g e
+    err(PI)
 
-let and_then (f : 'a -> ('b, 'e) result) (res : ('a, 'e) result): ('b, 'e) result =
-  fold_result f err res
+
+let concat (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+    if topTwoInteger st = true || lengthGreaterTwo st = false
+      then
+        err(PI)
+    else
+      let String i = List.nth st 0
+      in
+      let String j = List.nth st 1
+      in
+      let a = popStack (popStack st)
+      in
+      let removeQuotes (str : string) : string = 
+        Str.(global_replace (regexp "\"") "" str)
+      in
+      let newStack = (String("\"" ^ removeQuotes (i ^ j) ^ "\""))::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+
 
 let findGlobalVar (x : string) (e : env) =
   let glo = List.hd e
@@ -315,6 +295,57 @@ let local (tl : com list) (v : const) (p : program) : (result_out, parse_err) re
     in
     ok((tl,newProgram))
 
+let divide (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st && divideByZero st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( * ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
+
+let multiply (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( * ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
+
+let subtract (tl : com list) (p : program) : (result_out, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp (-) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((tl,newProgram))
+  else
+    err(PI)
+
 let add (tl : com list) (p : program) : (result_out, parse_err) result = 
   let (st,e) = p
   in
@@ -329,7 +360,6 @@ let add (tl : com list) (p : program) : (result_out, parse_err) result =
       let newProgram = (newStack, e)
       in
       ok((tl,newProgram))
-
   else
     err(PI)
 
