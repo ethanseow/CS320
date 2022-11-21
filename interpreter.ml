@@ -80,6 +80,8 @@ let stringToCom (inp : string list) : com =
   | "Swap" -> Swap
   | "Neg" -> Neg
   | "Concat" -> Concat
+  | "Begin" -> Begin
+  | "End" -> End
 
 let printToFile (inp : string list) (file_path : string) : unit = 
   let fp = open_out file_path in
@@ -368,8 +370,7 @@ let push (x : const) (tl : com list) (p : program) : (result_out, parse_err) res
       | None -> err(PI)
       | Some x -> ok( (tl ,((x::st),e)) )
       )
-
-let execCom (cl : com list) (p : program) : (result_out, parse_err) result = 
+let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result = 
   let nextCom = List.hd cl
   in
   let tl = List.tl cl
@@ -385,7 +386,71 @@ let execCom (cl : com list) (p : program) : (result_out, parse_err) result =
   | Local l -> local tl l p
   | Push x -> push x tl p
   | Add -> add tl p
-
+  | Begin ->
+    let (st,e) = p
+    in
+    let newE = List.rev ([]::(List.rev e))
+    in
+    let newP = ([],newE)
+    in
+    let helper (res : result_out) : (result_out, parse_err) result = 
+      let (comL, newP) = res
+      in
+      let (s, newE) = newP
+      in
+      let newS = (List.hd s)::st
+      in
+      let newP = (newS,newE)
+      in
+      ok( (comL, newP) )
+    in
+    (execBegin (List.tl cl) newP)  |> and_then @@ helper
+  and execBegin (cl : com list) (p : program) : (result_out, parse_err) result = 
+    let nextCom = List.hd cl
+    in
+    let tl = List.tl cl
+    in
+    match nextCom with
+    | End -> 
+      let (st, e) = p
+      in
+      let (_,trimmedE) = 
+      (List.fold_left 
+        (
+          fun acc h ->
+          let (i,l) = acc
+          in
+          if i = (List.length e)- 1
+            then
+            (i+1,l)
+          else
+            (i+1,h::l) 
+        )
+      (0,[]) e)
+      in
+      let newE : env = List.rev trimmedE
+      in
+      if List.length st < 1
+        then
+          err(PI)
+      else
+        let ret : stack = (List.hd st)::[]
+        in
+        let newP : program = (ret,newE)
+        in
+        ok( (tl , newP) )
+    | _ -> execCom cl p |> and_then @@ fun(newCl,newP) -> 
+      execBegin newCl newP
+let rec parse_all (cl : com list) (p : program) = 
+  let nextCom = List.hd cl
+  in
+  match nextCom with
+  | Quit -> 
+    let (st,e) = p
+    in
+    ok(p)
+  | _ -> (execCom cl p) |> and_then @@ (fun (newCl, newP) ->
+    parse_all newCl newP) 
 let parse (commList : com list) = 
   let rec parse_all (cl : com list) (p : program) = 
     let nextCom = List.hd cl
@@ -394,7 +459,7 @@ let parse (commList : com list) =
     | Quit -> 
       let (st,e) = p
       in
-      ok(st)
+      ok(p)
     | _ -> (execCom cl p) |> and_then @@ (fun (newCl, newP) ->
       parse_all newCl newP) 
   in
@@ -407,7 +472,7 @@ let interpreter (src : string) (output_file_path: string): unit =
   in
   match outp with
   | Err _ -> printToFile (("\"Error\"")::[]) output_file_path
-  | Ok st -> 
+  | Ok (st,p) -> 
     let strStk = constListToString st
     in
     printToFile strStk output_file_path

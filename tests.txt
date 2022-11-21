@@ -182,3 +182,14 @@ Add
 Global x
 Push x
 Quit";;
+
+let x = "Push 1
+Push 2
+Begin
+Push 3
+Push 7
+Push 4
+End
+Push 5
+Push 6
+Quit";;
