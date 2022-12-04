@@ -281,3 +281,94 @@ Push 5
 End
 End
 Quit";;
+
+let a = "IfThen
+Begin
+End
+Else
+Begin
+Push 3
+Begin
+Push 4
+End
+End
+End
+Push 4
+Begin
+End
+Push 5
+Quit";;
+
+let b = "Push 23
+Local x
+Push x
+Push 24
+Global y
+Push y
+Sub
+IfThen
+Push 37
+Push 1
+Local x
+Push x
+Begin
+Push 52
+Local x
+Push 7
+Global y
+Push y
+End
+Else
+Push 32
+Push 5
+Global y
+Push x
+Begin
+Push 71
+Local y
+Push 8
+Global x
+Push x
+End
+End
+Push x
+Push y
+Add
+Quit";;
+
+let q = "Push 23
+Local x
+Push x
+Push 24
+Global y
+Push y
+Sub
+IfThen
+Push 37
+Push 1
+Local x
+Push x
+Begin
+Push 52
+Local x
+Push 7
+Global y
+Push y
+End
+Else
+Push 32
+Push 5
+Global y
+Push x
+Begin
+Push 71
+Local y
+Push 8
+Global x
+Push x
+End
+End
+Push x
+Push y
+Add
+Quit";;
