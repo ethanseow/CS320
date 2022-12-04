@@ -200,3 +200,84 @@ End
 Push 5
 Push 6
 Quit";;
+
+
+let z = "Push 10
+Push 1
+IfThen
+Push 5
+Add
+Push 0
+IfThen
+Push \"bobby\"
+Else
+Push \"Jones\"
+End
+Else
+Push 5
+Sub
+End
+Quit";;
+
+let q = "Push 23
+Local x
+Push x
+Push 24
+Global y
+Push y
+Sub
+IfThen
+Push 37
+Push 1
+Local x
+Push x
+Begin
+Push 52
+Local x
+Push 7
+Global y
+Push y
+End
+Else
+Push 32
+Push 5
+Global y
+Push x
+Begin
+Push 71
+Local y
+Push 8
+Global x
+Push x
+End
+End
+Push x
+Push y
+Add
+Quit";;
+
+let a = "Push 1
+IfThen
+Begin
+Push \"bob\"
+End
+Push 10
+Push 3
+Else
+Push 9
+Push 1
+Begin
+Push \"bobby\"
+End
+End
+Quit";;   
+
+let b = "Begin
+Push 1
+IfThen
+Push 3
+Else
+Push 5
+End
+End
+Quit";;

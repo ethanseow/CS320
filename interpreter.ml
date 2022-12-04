@@ -13,16 +13,19 @@
    related problem. *)
 
 (*NOTE: There are no restrictions on what you can use*)
-(*#load "str.cma";;*)
+#load "str.cma";;
 
 (*
   Init Types   
 *)
+
 type const = 
   | Int of int
   | String of string
   | Var of string
-type com = 
+  | Clo of func
+  and func = Func of (string * string * com list)
+  and com = 
   | Quit
   | Push of const
   | Pop
@@ -41,9 +44,13 @@ type com =
   | Or
   | Not
   | Lte
-  | Ifthen
+  | IfThen
   | Else
   | Equal
+  | Call
+  | Return
+  | Fun
+  | Mut
 type ('a, 'e) result =
   | Ok of 'a
   | Err of 'e
@@ -114,7 +121,7 @@ let stringToCom (inp : string list) : com =
   | "Concat" -> Concat
   | "Begin" -> Begin
   | "End" -> End
-  | "Ifthen" -> Ifthen
+  | "IfThen" -> IfThen
   | "Else" -> Else
   | "And" -> And
   | "Or" -> Or
@@ -581,6 +588,22 @@ let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result =
   | Lte -> lteF tl p
   | Equal -> equalF tl p
   | Not -> notF tl p
+  | IfThen -> 
+      let (st,e) = p
+      in
+      if List.length st >= 1 && topOneBoolean st
+        then
+          let Int b = List.hd st
+          in
+          let stTail = List.tl st 
+          in
+          if b = 1
+            then
+              execCond 0 tl (stTail,e)
+          else
+            execCond 1 tl (stTail,e)
+      else
+        err(PI)
   | Begin ->
     let (st,e) = p
     in
@@ -600,6 +623,32 @@ let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result =
       ok( (comL, newP) )
     in
     (execBegin (List.tl cl) newP)  |> and_then @@ helper
+  and execCond (i : int) (cl : com list) (p : program) : (result_out, parse_err) result = 
+    let nextCom = List.hd cl
+    in
+    let tl = List.tl cl
+    in
+    match nextCom with
+    | Else -> execCond (i-1) tl p
+    | Begin -> 
+      if i = 0
+        then
+        (execCom cl p |> and_then @@ (fun (newC, newP) ->
+          execCond i newC newP
+        ))
+      else
+        (execCom cl p |> and_then @@ (fun (newC, newP) ->
+          execCond i newC p
+        ))
+    | End -> ok((tl,p))
+    | _ -> 
+      if i = 1 || i = -1
+        then
+          execCond i tl p
+      else
+        execCom cl p |> and_then @@ (fun (newC, newP) -> 
+        execCond i newC newP
+        )
   and execBegin (cl : com list) (p : program) : (result_out, parse_err) result = 
     let nextCom = List.hd cl
     in
@@ -636,16 +685,6 @@ let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result =
         ok( (tl , newP) )
     | _ -> execCom cl p |> and_then @@ fun(newCl,newP) -> 
       execBegin newCl newP
-let rec parse_all (cl : com list) (p : program) = 
-  let nextCom = List.hd cl
-  in
-  match nextCom with
-  | Quit -> 
-    let (st,e) = p
-    in
-    ok(p)
-  | _ -> (execCom cl p) |> and_then @@ (fun (newCl, newP) ->
-    parse_all newCl newP) 
 let parse (commList : com list) = 
   let rec parse_all (cl : com list) (p : program) = 
     let nextCom = List.hd cl
