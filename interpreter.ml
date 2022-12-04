@@ -23,8 +23,6 @@ type const =
   | Int of int
   | String of string
   | Var of string
-  | Clo of func
-  and func = Func of (string * string * com list)
   and com = 
   | Quit
   | Push of const
@@ -47,10 +45,6 @@ type const =
   | IfThen
   | Else
   | Equal
-  | Call
-  | Return
-  | Fun
-  | Mut
 type ('a, 'e) result =
   | Ok of 'a
   | Err of 'e
@@ -93,41 +87,42 @@ let stringToConst (str : string ) : const =
       else
         String("error")
 
-let stringToCom (inp : string list) : com =
-  let comm = List.nth inp 0
+let stringToCom (h : string) (t : string list): (com, parse_err) result =
+  let x = String.split_on_char ' ' inp
   in
-  match comm with
-  | "Quit" -> Quit
-  | "Push" -> 
-    let v = stringToConst (List.nth inp 1)
-    in
-    Push(v)
-  | "Global" -> 
-    let v = stringToConst (List.nth inp 1)
-    in
-    Global(v)
-  | "Local" -> 
-    let v = stringToConst(List.nth inp 1)
-    in
-    Local(v)
-  | "Pop" -> Pop
-  | "Add" -> Add
-  | "Concat" -> Concat
-  | "Sub" -> Sub
-  | "Mul" -> Mul
-  | "Div" -> Div
-  | "Swap" -> Swap
-  | "Neg" -> Neg
-  | "Concat" -> Concat
-  | "Begin" -> Begin
-  | "End" -> End
-  | "IfThen" -> IfThen
-  | "Else" -> Else
-  | "And" -> And
-  | "Or" -> Or
-  | "Lte" -> Lte
-  | "Not" -> Not
-  | "Equal" -> Equal
+  let c = List.hd x
+  in
+  if List.length x > 1 then
+    match stringToConst List.nth x 1 with
+    | Ok(n) -> 
+      match c with
+      | "Push" -> Push(n)
+      | "Global" -> Global(n)
+      | "Local" -> Local(n)
+    | Err(p) -> err(PI)
+  else
+    match c with
+    | "Begin" -> find_begin_end |> and_then @@ fun (com, string list) ->
+
+    | "IfThen" -> IfThen of (com list * com list)
+    | "Quit" -> Quit
+    | "Pop" -> Pop
+    | "Add" -> Add
+    | "Concat" -> Concat
+    | "Sub" -> Sub
+    | "Mul" -> Mul
+    | "Div" -> Div
+    | "Swap" -> Swap
+    | "Neg" -> Neg
+    | "Concat" -> Concat
+    | "End" -> End
+    | "Else" -> Else
+    | "And" -> And
+    | "Or" -> Or
+    | "Lte" -> Lte
+    | "Not" -> Not
+    | "Equal" -> Equal
+  and find_begin_end (t : string list): ((com * string list), parse_err) result = 
 
 let printToFile (inp : string list) (file_path : string) : unit = 
   let fp = open_out file_path in
@@ -136,15 +131,17 @@ let printToFile (inp : string list) (file_path : string) : unit =
   let () = Printf.fprintf fp "%s" lekunga in
     close_out fp
 
-let srcToCom (src : string) : com list = 
+let parse (src : string) : (com list, parse_err) result = 
   let cmds = String.split_on_char '\n' src
   in
-  let helper (inp : string) : com =
-    let x = String.split_on_char ' ' inp
-    in
-    stringToCom x
+  let parse_all (cmds : string list) (acc : com list): (com list, parse_err) result = 
+    match cmds with
+    | [] -> acc
+    | h::t -> 
+      stringToCom h t |> and_then @@ fun(com, string list) -> 
+        
   in
-  List.map helper cmds
+  parse_all cmds []
 
 let constListToString (c : const list) : string list =
   let helper (co : const) = 
@@ -685,8 +682,8 @@ let rec execCom (cl : com list) (p : program) : (result_out, parse_err) result =
         ok( (tl , newP) )
     | _ -> execCom cl p |> and_then @@ fun(newCl,newP) -> 
       execBegin newCl newP
-let parse (commList : com list) = 
-  let rec parse_all (cl : com list) (p : program) = 
+let eval (commList : com list) = 
+  let rec eval_all (cl : com list) (p : program) = 
     let nextCom = List.hd cl
     in
     match nextCom with
@@ -695,14 +692,14 @@ let parse (commList : com list) =
       in
       ok(p)
     | _ -> (execCom cl p) |> and_then @@ (fun (newCl, newP) ->
-      parse_all newCl newP) 
+      eval_all newCl newP) 
   in
-  parse_all commList ([], ([]::[]::[]))
+  eval_all commList ([], ([]::[]::[]))
 
 let interpreter (src : string) (output_file_path: string): unit =
-  let commList = srcToCom src
+  let commList = parse src
   in
-  let outp = parse commList
+  let outp = eval commList
   in
   match outp with
   | Err _ -> printToFile (("\"Error\"")::[]) output_file_path
