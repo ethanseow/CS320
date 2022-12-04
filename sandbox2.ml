@@ -77,8 +77,8 @@ let and_then (f : 'a -> ('b, 'e) result) (res : ('a, 'e) result): ('b, 'e) resul
 let regexp = Str.regexp "[-0-9]+$"
 let regexp2 = Str.regexp "\\\"[A-Za-z]+\\\"$"
 
-(* for variables - may need to change due to f being in front*)
-let regexp3 = Str.regexp "[a-z]+\\([0-9]|_\\)?$"
+(* for variables - may need to change due to f3333 being possible*)
+let regexp3 = Str.regexp "[a-z]+\\([0-9]\\|\\_\\)?$"
 let stringToConst (str : string ) : (const,parse_err) result =
   if Str.string_match regexp str 0
     then
@@ -259,7 +259,7 @@ InjL
 CaseLeft
 Push 3
 CaseLeft
-Push 5
+Push f3
 Right
 Push 5
 End
