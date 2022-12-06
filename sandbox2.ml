@@ -15,7 +15,7 @@
   | Quit
   | Get of int
   | Case of (com list * com list)
-  | Fun of (Clo list)
+  | Fun of (string * string * com list)
   | Push of const
   | Tuple of int
   | Pop
@@ -154,10 +154,11 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
         in
         let funcArg = List.nth x 2
         in
-        find_fun t [] |> and_then @@ ( fun(cloList, cmds) ->
-          let closure = Fun(cloList)
+        find_fun t [] |> and_then @@ ( fun(coms, cmds) ->
+          let closure = Fun(funcHeader, funcArg, coms)
           in
           ok( (closure, cmds)) )
+        
       else
         err(Unmatched)
     )
