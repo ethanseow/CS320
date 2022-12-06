@@ -309,7 +309,7 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
         stringToCom cmds |> and_then @@ fun (com,rest) ->
         (* first argument always gets populated *)
         find_lr rest (com::left) right
-let parse (src : string) : (com list,parse_err) result = 
+let parse (src : string) = 
   let cmds = String.split_on_char '\n' src
   in
   let rec parse_all (cmds : string list) (acc : com list): (com list, parse_err) result = 
@@ -319,7 +319,9 @@ let parse (src : string) : (com list,parse_err) result =
       stringToCom cmds |> and_then @@ fun(com, cmds) -> 
         parse_all (cmds) (com::acc)
   in
-  parse_all cmds []
+  match parse_all cmds [] with
+  | Ok(p) -> List.rev p
+  | Err(e) -> []
 let findVar (x: string) (e : env) (i : int) = 
   let currEnv = (List.nth e i)
   in
@@ -445,9 +447,12 @@ let rec eval_all (src : com list) (prog : program) : (program, parse_err) result
 let rec eval (src : com list) (prog : program): (program, parse_err) result = 
   match src with
   | [] -> err(NoQuitStatement)
-  | _::t -> (
-    eval_all src prog |> and_then @@ fun newProg ->
-      eval t newProg
+  | h::t -> (
+    if h = Quit then
+      ok(prog)
+    else
+      eval_all src prog |> and_then @@ fun newProg ->
+        eval t newProg
   )
 
 (* helper execution commands *)
@@ -886,14 +891,21 @@ let rec execCom (cl : com list) (p : program) : (program, parse_err) result =
   in
   eval_all commList ([], ([]::[]::[]))
 *)
-let z = "Fun foo my_arg
+
+let q = "Push 5
+Global z
+Begin
 Push 3
-Return
-Mut foo a
-Push 4
+Global x
+Push 1
+IfThen
 Push 3
-Return
+Else
+Push 5
 End
-Push foo
+End
+Begin
+Push 68
+End
 Quit";;
-parse z;;
+eval (parse q) ([],([]::[]::[]))
