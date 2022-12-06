@@ -64,7 +64,11 @@ type parse_err =
   | NotInClosure
   | NotBooleanOrEmptyStack
   | EmptyStackInBegin
+  | EmptyStackInLocal
+  | EmptyStackInGlobal
   | PI
+  | NoQuitStatement
+  | VariableNotFound
 type result_out = ((com list) * program)
 let fold_result (f : 'a -> 'b) (g : 'e -> 'b) (res : ('a, 'e) result): 'b =
   match res with
@@ -267,7 +271,7 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
           in
           let newCloAcc = newRealClo::(List.tl cloAcc)
           in
-          ok( (newCloAcc,t) )
+          ok( (newCloAcc  ,t) )
       | "Mut" -> 
         if List.length acc = 0 || ((List.hd acc) <> Return) then
           err(MissingReturnStatementMut)
@@ -316,6 +320,136 @@ let parse (src : string) : (com list,parse_err) result =
         parse_all (cmds) (com::acc)
   in
   parse_all cmds []
+let findVar (x: string) (e : env) (i : int) = 
+  let currEnv = (List.nth e i)
+  in
+  List.assoc_opt x currEnv
+let push (x : const) (p : program) : (program, parse_err) result = 
+  let (st, e) = p
+  in
+  let newStack = (x::st)
+  in
+  let newProgram = (newStack, e)
+  in
+  match x with
+  | String s -> 
+      ok(newProgram)
+  | Int i -> 
+      ok(newProgram)
+  | Var v -> 
+      (
+      let n = (List.length e) - 1
+      in
+      let rec trav (i : int) (e : env) = 
+        if i < 0
+          then
+            None
+        else
+          match findVar v e i with
+          | None -> trav (i-1) e
+          | Some x -> (Some(x))
+      in
+      match trav n e with
+      | None -> err(VariableNotFound)
+      | Some x -> ok((x::st),e)
+      )
+let updateEnv (vari : string) (toChange : const) (e : env) (index : int) : env = 
+    let (_, newEnv) = List.fold_left (fun acc h -> 
+      let (i,newEnv) = acc
+      in
+      if i = index
+        then
+          let newH = (vari, toChange)::(List.remove_assoc vari h)
+          in
+          (i+1,newH::newEnv)
+      else
+        (i+1,h::newEnv)
+    ) (0, []) e
+    in
+    (List.rev newEnv)
+let global (v : const) (p : program) : (program, parse_err) result = 
+  let (st, e) = p
+  in
+  let Var vari = v
+  in
+  match st with
+  | [] -> err(EmptyStackInGlobal)
+  | topStack::restStack -> 
+    let newEnv = updateEnv vari topStack e 0
+    in 
+    let newProgram = (restStack, newEnv)
+    in
+    ok(newProgram)
+
+let local (v : const) (p : program) : (program, parse_err) result = 
+  let (st, e) = p
+  in
+  let Var vari = v
+  in
+  match st with
+  | [] -> err(EmptyStackInLocal)
+  | topStack::restStack ->
+    let newEnv = updateEnv vari topStack e ((List.length e) - 1)
+    in 
+    let newProgram = (restStack, newEnv)
+    in
+    ok(newProgram)
+
+let removeLocalEnv (cl : env) : env =
+  List.rev (List.tl (List.rev cl))
+let rec eval_all (src : com list) (prog : program) : (program, parse_err) result = 
+  let (st,e) = prog
+  in
+  let h = List.hd src
+  in
+  match h with
+  | Quit -> ok(prog)
+  | Begin (comlist) ->
+    let newE = List.rev ([]::(List.rev e))
+    in
+    let newP = ([],newE)
+    in
+    eval_all comlist newP |> and_then @@ fun(newS,retE) ->
+      if List.length newS < 1 then
+        err(EmptyStackInBegin)
+      else
+        let top = List.hd newS
+        in
+        let newE = removeLocalEnv retE
+        in
+        (* Need to think about how to deal with the given new environment - remove top of the stack *)
+        let newP = ((top::st), newE)
+        in
+        ok(newP)
+  | IfThen(ift,els)-> 
+      if List.length st >= 1 && topOneBoolean st
+        then
+          let Int b = List.hd st
+          in
+          let stTail = List.tl st 
+          in
+          if b = 1 then
+            eval_all ift (stTail,e) |> and_then @@ fun newP -> ok(newP)
+          else
+            eval_all els (stTail,e) |> and_then @@ fun newP -> ok(newP)
+      else
+        err(NotBooleanOrEmptyStack)
+  | Push(x) -> push x prog
+  | Global(v) -> global v prog
+  | Local(v) -> local v prog
+
+
+
+
+
+let rec eval (src : com list) (prog : program): (program, parse_err) result = 
+  match src with
+  | [] -> err(NoQuitStatement)
+  | _::t -> (
+    eval_all src prog |> and_then @@ fun newProg ->
+      eval t newProg
+  )
+
 (* helper execution commands *)
 (*
 let popStack (accum : stack) = 
