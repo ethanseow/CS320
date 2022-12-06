@@ -15,7 +15,7 @@
   | Quit
   | Get of int
   | Case of (com list * com list)
-  | Fun of (string * string * com list)
+  | Fun of (const list)
   | Push of const
   | Tuple of int
   | Pop
@@ -64,6 +64,7 @@ type parse_err =
   | NotInClosure
   | NotBooleanOrEmptyStack
   | EmptyStackInBegin
+  | PI
 type result_out = ((com list) * program)
 let fold_result (f : 'a -> 'b) (g : 'e -> 'b) (res : ('a, 'e) result): 'b =
   match res with
@@ -149,13 +150,9 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
   match List.length x with
   | 3 ->
     (
-      if c = "Fun" || c = "Mut" then
-        let funcHeader = List.nth x 1
-        in
-        let funcArg = List.nth x 2
-        in
-        find_fun t [] |> and_then @@ ( fun(coms, cmds) ->
-          let closure = Fun(funcHeader, funcArg, coms)
+      if c = "Fun" then
+        find_fun cmds [] [] |> and_then @@ ( fun(cloList, cmds) ->
+          let closure = Fun(cloList)
           in
           ok( (closure, cmds)) )
         
@@ -243,29 +240,52 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
         stringToCom cmds |> and_then @@ fun (com,rest) ->
         (* first argument always gets populated *)
         find_ifthen_end rest (com::ift) els
-  and find_fun (cmds : string list) (acc : com list) : ((com list * string list), parse_err) result = 
+  and find_fun (cmds : string list) (acc : com list) (cloAcc : const list): ((const list * string list), parse_err) result = 
     match cmds with
     | [] -> err(NoEndStatementOnFun)
     | h::t -> 
       let x = List.hd(String.split_on_char ' ' h)
       in
       match x with
+      | "Fun" ->
+        let funcHeader = List.nth (String.split_on_char ' ' h) 1
+        in
+        let funcArg = List.nth (String.split_on_char ' ' h) 2 
+        in
+        let newClo = (Clo(funcHeader,funcArg,[])::cloAcc)
+        in
+        find_fun t acc newClo
       | "Return" ->
-        find_fun t (Return::acc) 
+        find_fun t (Return::acc) cloAcc
       | "End" -> 
         if List.length acc = 0 || ((List.hd acc) <> Return) then
           err(MissingReturnStatement)
         else
-          ok( ( (List.rev acc), t) )
-
+          let Clo(prevCloHeader,prevCloArg,_) = List.hd cloAcc 
+          in
+          let newRealClo = Clo(prevCloHeader,prevCloArg, (List.rev acc))
+          in
+          let newCloAcc = newRealClo::(List.tl cloAcc)
+          in
+          ok( (newCloAcc,t) )
       | "Mut" -> 
-        if List.hd acc <> Return then
+        if List.length acc = 0 || ((List.hd acc) <> Return) then
           err(MissingReturnStatementMut)
         else
-          ok( ( (List.rev acc), cmds) )
+          let Clo(prevCloHeader,prevCloArg,_) = List.hd cloAcc 
+          in
+          let newRealClo = Clo(prevCloHeader,prevCloArg,(List.rev acc))
+          in
+          let newCloAcc = newRealClo::(List.tl cloAcc)
+          in
+          let funcHeader = List.nth (String.split_on_char ' ' h) 1
+          in
+          let funcArg = List.nth (String.split_on_char ' ' h) 2 
+          in
+          find_fun t [] (Clo(funcHeader,funcArg,[])::newCloAcc)
       | _ ->
         stringToCom cmds |> and_then @@ fun (com,rest) ->
-        find_fun rest (com::acc) 
+        find_fun rest (com::acc) cloAcc
   and find_lr (cmds : string list) (left : com list) (right : com list) : ((ifthen * string list), parse_err) result = 
     match cmds with
     | [] -> err(NoEndStatementOnLR)
@@ -297,7 +317,7 @@ let parse (src : string) : (com list,parse_err) result =
   in
   parse_all cmds []
 (* helper execution commands *)
-
+(*
 let popStack (accum : stack) = 
     match accum with
       | [] -> [] 
@@ -731,22 +751,15 @@ let rec execCom (cl : com list) (p : program) : (program, parse_err) result =
       eval_all newCl newP) 
   in
   eval_all commList ([], ([]::[]::[]))
-
-let a = "Push 5
-InjL
-CaseLeft
+*)
+let z = "Fun foo my_arg
 Push 3
-CaseLeft
-Push f3
-Right
-Push 5
-End
+Return
+Mut foo a
 Push 4
-Right
-Add
+Push 3
+Return
 End
-Tuple 3
-Get 2
-Quit
-Call";;
-parse a;;
+Push foo
+Quit";;
+parse z;;

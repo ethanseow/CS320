@@ -372,3 +372,11 @@ Push x
 Push y
 Add
 Quit";;
+
+
+let z = "Fun foo my_arg
+Return
+Mut foo a
+End
+Push foo
+Quit";;
