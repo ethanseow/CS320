@@ -399,7 +399,18 @@ let local (v : const) (p : program) : (program, parse_err) result =
 
 let removeLocalEnv (cl : env) : env =
   List.rev (List.tl (List.rev cl))
-let rec eval_all (src : com list) (prog : program) : (program, parse_err) result = 
+
+let rec eval (src : com list) (prog : program): (program, parse_err) result = 
+  match src with
+  | [] -> err(NoQuitStatement)
+  | h::t -> (
+    if h = Quit then
+      ok(prog)
+    else
+      eval_all src prog |> and_then @@ fun newProg ->
+        eval t newProg
+  )
+  and eval_all (src : com list) (prog : program) : (program, parse_err) result = 
   let (st,e) = prog
   in
   let h = List.hd src
@@ -411,7 +422,7 @@ let rec eval_all (src : com list) (prog : program) : (program, parse_err) result
     in
     let newP = ([],newE)
     in
-    eval_all comlist newP |> and_then @@ fun(newS,retE) ->
+    eval comlist newP |> and_then @@ fun(newS,retE) ->
       if List.length newS < 1 then
         err(EmptyStackInBegin)
       else
@@ -431,29 +442,14 @@ let rec eval_all (src : com list) (prog : program) : (program, parse_err) result
           let stTail = List.tl st 
           in
           if b = 1 then
-            eval_all ift (stTail,e) |> and_then @@ fun newP -> ok(newP)
+            eval ift (stTail,e) |> and_then @@ fun newP -> ok(newP)
           else
-            eval_all els (stTail,e) |> and_then @@ fun newP -> ok(newP)
+            eval els (stTail,e) |> and_then @@ fun newP -> ok(newP)
       else
         err(NotBooleanOrEmptyStack)
   | Push(x) -> push x prog
   | Global(v) -> global v prog
   | Local(v) -> local v prog
-
-
-
-
-
-let rec eval (src : com list) (prog : program): (program, parse_err) result = 
-  match src with
-  | [] -> err(NoQuitStatement)
-  | h::t -> (
-    if h = Quit then
-      ok(prog)
-    else
-      eval_all src prog |> and_then @@ fun newProg ->
-        eval t newProg
-  )
 
 (* helper execution commands *)
 (*
@@ -892,20 +888,9 @@ let rec execCom (cl : com list) (p : program) : (program, parse_err) result =
   eval_all commList ([], ([]::[]::[]))
 *)
 
-let q = "Push 5
-Global z
-Begin
-Push 3
-Global x
+let q = "Begin
 Push 1
-IfThen
-Push 3
-Else
-Push 5
-End
-End
-Begin
-Push 68
+Push 41
 End
 Quit";;
 eval (parse q) ([],([]::[]::[]))
