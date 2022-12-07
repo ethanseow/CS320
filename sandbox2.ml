@@ -11,6 +11,7 @@
   | Left of const 
   | Right of const
   | TupleConst of (const list)
+  | QuitConst
   and com = 
   | Quit
   | Get of int
@@ -64,8 +65,12 @@ type parse_err =
   | NotInClosure
   | NotBooleanOrEmptyStack
   | EmptyStackInBegin
+  | EmptyStackInCase
+  | NotLeftRightCase
   | EmptyStackInLocal
   | EmptyStackInGlobal
+  | EmptyStackInInjl
+  | EmptyStackInInjr
   | PI
   | NoQuitStatement
   | VariableNotFound
@@ -126,7 +131,7 @@ let regexp = Str.regexp "[-0-9]+$"
 let regexp2 = Str.regexp "\\\"[A-Za-z]+\\\"$"
 
 (* for variables - may need to change due to f3333 being possible*)
-let regexp3 = Str.regexp "[a-z]+\\([0-9]\\|\\_\\)?$"
+let regexp3 = Str.regexp "[a-zA-Z]+\\([0-9]\\|\\_\\)?$"
 let stringToConst (str : string ) : (const,parse_err) result =
   if Str.string_match regexp str 0
     then
@@ -322,6 +327,281 @@ let parse (src : string) =
   match parse_all cmds [] with
   | Ok(p) -> List.rev p
   | Err(e) -> []
+
+(* helper execution commands *)
+let popStack (accum : stack) = 
+    match accum with
+      | [] -> [] 
+      | _::t -> t
+
+let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const = 
+  let Int i = a
+  in
+  let Int j = b
+  in
+  (Int(f i j))
+
+let bool_of_string (s : string) = 
+  if s = "1" then true else false
+let bool_of_int (i: int) = 
+  bool_of_string (string_of_int i)
+
+let int_of_bool (b : bool) =
+  if b then 1 else 0
+let bool_op (f : 'a -> 'b -> 'c) (a : const) (b : const) : const = 
+    let (Int i,Int j) = (a,b)
+    in
+    let b1 = bool_of_int i
+    in
+    let b2 = bool_of_int j
+    in
+    Int(int_of_bool (f b1  b2))
+let pop (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if stackHasElem st
+    then
+      let a = (popStack st)
+      in
+      let newStack = a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let swap (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = two::one::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let neg (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if isInteger (List.nth st 0) = true && stackHasElem st
+    then
+      let Int i = List.nth st 0
+      in
+      let a = popStack st
+      in
+      let newStack = (Int(-1 * i))::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+
+let concat (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+    if topTwoInteger st = true || lengthGreaterTwo st = false
+      then
+        err(PI)
+    else
+      let String i = List.nth st 0
+      in
+      let String j = List.nth st 1
+      in
+      let a = popStack (popStack st)
+      in
+      let removeQuotes (str : string) : string = 
+        Str.(global_replace (regexp "\"") "" str)
+      in
+      let newStack = (String("\"" ^ removeQuotes (i ^ j) ^ "\""))::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+
+
+let div (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st && divideByZero st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( / ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let mul (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( * ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let sub (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp (-) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let add (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp (+) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let andF (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoBoolean st
+    then
+      let (a,b) = (List.nth st 0, List.nth st 1)
+      in
+      let a2 = popStack (popStack st)
+      in
+      let res = bool_op (&&) a b 
+      in
+      let newStack = res::a2
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let orF (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoBoolean st
+    then
+      let (a,b) = (List.nth st 0, List.nth st 1)
+      in
+      let a2 = popStack (popStack st)
+      in
+      let res = bool_op (||) a b 
+      in
+      let newStack = res::a2
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let notF (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if List.length st >= 1 && topOneBoolean st
+    then
+      let Int i = List.nth st 0
+      in
+      let a = popStack st
+      in
+      let b1 = bool_of_int i
+      in
+      let res = Int(int_of_bool (not b1))
+      in
+      let newStack = res::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+let lteF (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( 
+        fun a b ->
+          if a <= b
+            then
+            int_of_bool(true)
+          else
+          int_of_bool(false)
+      ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
+
+let equalF (p : program) : (program, parse_err) result = 
+  let (st,e) = p
+  in
+  if lengthGreaterTwo st && topTwoInteger st
+    then
+      let (one,two) = (List.nth st 0, List.nth st 1)
+      in
+      let a = popStack (popStack st)
+      in
+      let newStack = (higherOrderOp ( 
+        fun a b ->
+          if a = b
+            then
+            int_of_bool(true)
+          else
+          int_of_bool(false)
+      ) one two)::a
+      in
+      let newProgram = (newStack, e)
+      in
+      ok((newProgram))
+  else
+    err(PI)
 let findVar (x: string) (e : env) (i : int) = 
   let currEnv = (List.nth e i)
   in
@@ -397,18 +677,80 @@ let local (v : const) (p : program) : (program, parse_err) result =
     in
     ok(newProgram)
 
+
 let removeLocalEnv (cl : env) : env =
   List.rev (List.tl (List.rev cl))
 
-let rec eval (src : com list) (prog : program): (program, parse_err) result = 
+
+
+let funF (cloList : const list) (prog : program) : (program, parse_err) result = 
+  let (st,e) = prog
+  in
+  (* put all functions into local env *)
+  let helper (acc : env) (clo : const) : env = 
+    match clo with
+    | Clo(funcName, _, _) -> 
+      let vari = Var(funcName)
+      in
+      let updatedE = (local vari ((clo::[]),acc))
+      in
+      match updatedE with
+      | Err(_) -> []
+      | Ok((_,newE)) -> newE 
+    | _ -> []
+  in
+  let addedFunToEnv = List.fold_left helper e cloList  
+  in
+  ok((st,addedFunToEnv))
+    
+
+let injl (prog : program) : (program, parse_err) result = 
+  let (st,e) = prog
+  in
+  if (stackHasElem st) then
+    let left = Left(List.hd st)
+    in
+    let newSt = left::(List.tl st)
+    in
+    ok(((newSt), e ))
+  else
+    err(EmptyStackInInjl)
+let injr (prog : program) : (program, parse_err) result = 
+  let (st,e) = prog
+  in
+  if (stackHasElem st) then
+    let right = Right(List.hd st)
+    in
+    let newSt = right::(List.tl st)
+    in
+    ok(((newSt), e ))
+  else
+    err(EmptyStackInInjr)
+
+let case (left : com list) (right : com list) (evalInner) (prog : program) = 
+  let (st,e) = prog
+  in
+  if (stackHasElem st) then
+    match List.hd st with
+    | Left(c)  -> evalInner left ((c::(List.tl st)),e)
+    | Right(c)  -> evalInner right ((c::(List.tl st)),e)
+    | _ -> err(NotLeftRightCase)
+  else
+    err(EmptyStackInCase)
+
+let rec evalInner (src : com list) (prog : program): (program, parse_err) result = 
   match src with
-  | [] -> err(NoQuitStatement)
+  | [] -> ok(prog)
   | h::t -> (
     if h = Quit then
-      ok(prog)
+      let (st,e) = prog
+      in
+      let newSt = QuitConst::st
+      in
+      ok((newSt,e))
     else
       eval_all src prog |> and_then @@ fun newProg ->
-        eval t newProg
+        evalInner t newProg
   )
   and eval_all (src : com list) (prog : program) : (program, parse_err) result = 
   let (st,e) = prog
@@ -416,13 +758,12 @@ let rec eval (src : com list) (prog : program): (program, parse_err) result =
   let h = List.hd src
   in
   match h with
-  | Quit -> ok(prog)
   | Begin (comlist) ->
     let newE = List.rev ([]::(List.rev e))
     in
     let newP = ([],newE)
     in
-    eval comlist newP |> and_then @@ fun(newS,retE) ->
+    evalInner comlist newP |> and_then @@ fun(newS,retE) ->
       if List.length newS < 1 then
         err(EmptyStackInBegin)
       else
@@ -442,455 +783,219 @@ let rec eval (src : com list) (prog : program): (program, parse_err) result =
           let stTail = List.tl st 
           in
           if b = 1 then
-            eval ift (stTail,e) |> and_then @@ fun newP -> ok(newP)
+            evalInner ift (stTail,e) |> and_then @@ fun newP -> ok(newP)
           else
-            eval els (stTail,e) |> and_then @@ fun newP -> ok(newP)
+            evalInner els (stTail,e) |> and_then @@ fun newP -> ok(newP)
       else
         err(NotBooleanOrEmptyStack)
   | Push(x) -> push x prog
   | Global(v) -> global v prog
   | Local(v) -> local v prog
-
-(* helper execution commands *)
-(*
-let popStack (accum : stack) = 
-    match accum with
-      | [] -> [] 
-      | _::t -> t
-
-
-
-let higherOrderOp (f : 'a -> 'b -> 'c) (a : const) (b: const) : const = 
-  let Int i = a
-  in
-  let Int j = b
-  in
-  (Int(f i j))
-
-let bool_of_string (s : string) = 
-  if s = "1" then true else false
-let bool_of_int (i: int) = 
-  bool_of_string (string_of_int i)
-
-let int_of_bool (b : bool) =
-  if b then 1 else 0
-let bool_op (f : 'a -> 'b -> 'c) (a : const) (b : const) : const = 
-    let (Int i,Int j) = (a,b)
-    in
-    let b1 = bool_of_int i
-    in
-    let b2 = bool_of_int j
-    in
-    Int(int_of_bool (f b1  b2))
-let pop (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if stackHasElem st
-    then
-      let a = (popStack st)
-      in
-      let newStack = a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let swap (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st
-    then
-      let (one,two) = (List.nth st 0, List.nth st 1)
-      in
-      let a = popStack (popStack st)
-      in
-      let newStack = two::one::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let neg (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if isInteger (List.nth st 0) = true && stackHasElem st
-    then
-      let Int i = List.nth st 0
-      in
-      let a = popStack st
-      in
-      let newStack = (Int(-1 * i))::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-
-let concat (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-    if topTwoInteger st = true || lengthGreaterTwo st = false
-      then
-        err(PI)
+  | Pop -> pop prog
+  | Add -> add prog
+  | Sub -> sub prog
+  | Mul -> mul prog
+  | Div -> div prog
+  | Swap -> swap prog
+  | Neg -> neg prog
+  | Concat -> concat prog
+  | And -> andF prog
+  | Or -> orF prog
+  | Not -> notF prog
+  | Lte -> lteF prog
+  | Equal -> equalF prog
+  | Fun(cloList) -> funF cloList prog
+  | InjL -> injl prog
+  | InjR -> injr prog
+  | Case(left,right) -> case left right evalInner prog
+let rec eval (src : com list) (prog : program): (program, parse_err) result = 
+  match src with
+  | [] -> err(NoQuitStatement)
+  | h::t -> (
+    if h = Quit then
+      ok(prog)
     else
-      let String i = List.nth st 0
-      in
-      let String j = List.nth st 1
-      in
-      let a = popStack (popStack st)
-      in
-      let removeQuotes (str : string) : string = 
-        Str.(global_replace (regexp "\"") "" str)
-      in
-      let newStack = (String("\"" ^ removeQuotes (i ^ j) ^ "\""))::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-
-
-let findGlobalVar (x : string) (e : env) =
-  let glo = List.hd e
-  in
-  List.assoc_opt x glo
-
-let findVar (x: string) (e : env) (i : int) = 
-  let currEnv = (List.nth e i)
-  in
-  List.assoc_opt x currEnv
-
-let updateEnv (vari : string) (toChange : const) (e : env) (index : int) : env = 
-    let (_, newEnv) = List.fold_left (fun acc h -> 
-      let (i,newEnv) = acc
-      in
-      if i = index
-        then
-          let newH = (vari, toChange)::(List.remove_assoc vari h)
-          in
-          (i+1,newH::newEnv)
-      else
-        (i+1,h::newEnv)
-    ) (0, []) e
-    in
-    (List.rev newEnv)
-
-let global (tl : com list) (v : const) (p : program) : (result_out, parse_err) result = 
-  let (st, e) = p
-  in
-  let Var vari = v
-  in
-  match st with
-  | [] -> err(PI)
-  | topStack::restStack ->
-    let newEnv = updateEnv vari topStack e 0
-    in 
-    let newProgram = (restStack, newEnv)
-    in
-    ok((tl,newProgram))
-
-let local (tl : com list) (v : const) (p : program) : (result_out, parse_err) result = 
-  let (st, e) = p
-  in
-  let Var vari = v
-  in
-  match st with
-  | [] -> err(PI)
-  | topStack::restStack ->
-    let newEnv = updateEnv vari topStack e ((List.length e) - 1)
-    in 
-    let newProgram = (restStack, newEnv)
-    in
-    ok((tl,newProgram))
-
-let div (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoInteger st && divideByZero st
-    then
-      let (one,two) = (List.nth st 0, List.nth st 1)
-      in
-      let a = popStack (popStack st)
-      in
-      let newStack = (higherOrderOp ( / ) one two)::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let mul (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoInteger st
-    then
-      let (one,two) = (List.nth st 0, List.nth st 1)
-      in
-      let a = popStack (popStack st)
-      in
-      let newStack = (higherOrderOp ( * ) one two)::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let sub (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoInteger st
-    then
-      let (one,two) = (List.nth st 0, List.nth st 1)
-      in
-      let a = popStack (popStack st)
-      in
-      let newStack = (higherOrderOp (-) one two)::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let add (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoInteger st
-    then
-      let (one,two) = (List.nth st 0, List.nth st 1)
-      in
-      let a = popStack (popStack st)
-      in
-      let newStack = (higherOrderOp (+) one two)::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let andF (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoBoolean st
-    then
-      let (a,b) = (List.nth st 0, List.nth st 1)
-      in
-      let a2 = popStack (popStack st)
-      in
-      let res = bool_op (&&) a b 
-      in
-      let newStack = res::a2
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let orF (tl : com list) (p : program) : (result_out, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoBoolean st
-    then
-      let (a,b) = (List.nth st 0, List.nth st 1)
-      in
-      let a2 = popStack (popStack st)
-      in
-      let res = bool_op (||) a b 
-      in
-      let newStack = res::a2
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let notF (tl : com list) (p : program) : (program, parse_err) result = 
-  let (st,e) = p
-  in
-  if List.length st >= 1 && topOneBoolean st
-    then
-      let Int i = List.nth st 0
-      in
-      let a = popStack st
-      in
-      let b1 = bool_of_int i
-      in
-      let res = Int(int_of_bool (not b1))
-      in
-      let newStack = res::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-let lteF (tl : com list) (p : program) : (program, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoInteger st
-    then
-      let (one,two) = (List.nth st 0, List.nth st 1)
-      in
-      let a = popStack (popStack st)
-      in
-      let newStack = (higherOrderOp ( 
-        fun a b ->
-          if a <= b
-            then
-            int_of_bool(true)
-          else
-          int_of_bool(false)
-      ) one two)::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let equalF (tl : com list) (p : program) : (program, parse_err) result = 
-  let (st,e) = p
-  in
-  if lengthGreaterTwo st && topTwoInteger st
-    then
-      let (one,two) = (List.nth st 0, List.nth st 1)
-      in
-      let a = popStack (popStack st)
-      in
-      let newStack = (higherOrderOp ( 
-        fun a b ->
-          if a = b
-            then
-            int_of_bool(true)
-          else
-          int_of_bool(false)
-      ) one two)::a
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  else
-    err(PI)
-
-let push (x : const) (tl : com list) (p : program) : (program, parse_err) result = 
-  let (st, e) = p
-  in
-  match x with
-  | String s -> 
-      let newStack = (x::st)
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  | Int i -> 
-      let newStack = (x::st)
-      in
-      let newProgram = (newStack, e)
-      in
-      ok((tl,newProgram))
-  | Var v -> 
-      (
-      let n = (List.length e) - 1
-      in
-      let rec trav (i : int) (e : env) = 
-        if i < 0
-          then
-            None
-        else
-          match findVar v e i with
-          | None -> trav (i-1) e
-          | Some x -> (Some(x))
-      in
-      match trav n e with
-      | None -> err(PI)
-      | Some x -> ok( (tl ,((x::st),e)) )
-      )
-
-(* execution*)
-
-let rec execCom (cl : com list) (p : program) : (program, parse_err) result = 
-
-  let nextCom = List.hd cl
-  in
-  let tl = List.tl cl
-  in
-  match nextCom with 
-  | Global g -> global tl g p
-  | Local l -> local tl l p
-  | Push x -> push x tl p
-  | Add -> add tl p
-  | Sub -> sub tl p
-  | Div -> div tl p
-  | Mul -> mul tl p
-  | Neg -> neg tl p
-  | Swap -> swap tl p
-  | Concat -> concat tl p
-  | Pop -> pop tl p
-  | And -> andF tl p
-  | Or -> orF tl p
-  | Lte -> lteF tl p
-  | Equal -> equalF tl p
-  | Not -> notF tl p
-  | IfThen(ift,els)-> 
-      let (st,e) = p
-      in
-      if List.length st >= 1 && topOneBoolean st
-        then
-          let Int b = List.hd st
-          in
-          let stTail = List.tl st 
-          in
-          if b = 1 then
-            execCom ift p |> and_then @@ fun newP -> ok(newP)
-          else
-            execCom els p |> and_then @@ fun newP -> ok(newP)
-      else
-        err(NotBooleanOrEmptyStack)
-  | Begin(cmds)->
-    let (st,e) = p
-    in
-    let newE = List.rev ([]::(List.rev e))
-    in
-    let newP = ([],newE)
-    in
-    execCom cmds newP |> and_then @@ fun(newS,_) ->
-      if List.length newS < 1 then
-        err(EmptyStackInBegin)
-      else
-        let top = List.hd newS
+      eval_all src prog |> and_then @@ (fun newProg ->
+        let (st,e) = newProg
         in
-        let newP = ((top::st), e)
-        in
-        ok(newP)
+        match st with
+        | h::_ ->
+          (
+            match h with
+          | QuitConst -> ok(( (List.tl st) , e))
+          | _ -> eval t newProg
+          )
+        | _ -> eval t newProg)
+  )
 
-        let eval (commList : com list) = 
-  let rec eval_all (cl : com list) (p : program) = 
-    let nextCom = List.hd cl
-    in
-    match nextCom with
-    | Quit -> 
-      let (st,e) = p
-      in
-      ok(p)
-    | _ -> (execCom cl p) |> and_then @@ (fun newP ->
-      eval_all newCl newP) 
-  in
-  eval_all commList ([], ([]::[]::[]))
-*)
+let b = "Push 55
+Local x
+Push x
+Begin
+Push 3
+Push 5
+Global x
+Push 7
+Push x
+End
+Push x
+Quit";;
 
-let q = "Begin
-Push 1
-Push 41
+
+(* testing *)
+(* page 18 example 1 *)
+let a = "Push 1
+Push 2
+Begin
+Push 3
+Push 7
+Push 4
+End
+Push 5
+Push 6
+Quit";;
+
+(* page 18 example 2 - expected error*)
+let b = "Push 3
+Begin
+Pop
+Push 7
 End
 Quit";;
-eval (parse q) ([],([]::[]::[]))
+
+(* expected is "Error" *)
+let c = "Push 10
+Push \"abc\"
+Push 1
+Push 0
+And
+Or
+Quit";;
+
+
+(* expected is 1*)
+let d = "Push 1
+Push 0
+And
+Push 1
+Or
+Not
+Push 100
+Push 100
+Equal
+Or
+Quit";;
+
+(* expected xyz 10 Correct *)
+let e = "Push 10
+Global x
+Push \"abc\"
+Global s
+Push 20
+Global z
+Begin
+Push \"burger\"
+Local z
+Push x
+Push 20
+Equal
+IfThen
+Push \"def\"
+Global s
+Else
+Push \"xyz\"
+Global s
+End
+Push 50
+Local x
+Begin
+Push x
+Push 40
+Lte
+IfThen
+Push \"Correct\"
+Else
+Push \"Incorrect\"
+End
+End
+Push \"spaghetti\"
+Global z
+End
+Push x
+Push s
+Quit";;
+
+
+let f = "Fun isOdd x
+Push 3
+Return
+Mut isEven x
+Push 5
+Return
+End
+Push isOdd
+Push isEven
+Quit";;
+
+(* should give Right and the closure *)
+let g = "Fun foo x
+Return
+End
+Push foo
+InjR
+Quit";;
+
+(* should give error *)
+let h = "InjR
+Quit";;
+
+(* should just give 5*)
+let i = "Push 5
+InjL
+CaseLeft
+Right
+Add
+End
+Quit";;
+
+(* should be error *)
+let j = "Push 5
+InjR
+CaseLeft
+Right
+Add
+End
+Quit";;
+
+(* should be Bobhello*)
+let k = "Push \"hello\"
+InjR
+CaseLeft
+Push 1
+Add
+Right
+Push \"Bob\"
+Concat
+End
+Quit"
+let parse2 (src : string) = 
+  let cmds = String.split_on_char '\n' src
+  in
+  let rec parse_all (cmds : string list) (acc : com list): (com list, parse_err) result = 
+    match cmds with
+    | [] -> ok(acc)
+    | _::_ -> 
+      stringToCom cmds |> and_then @@ fun(com, cmds) -> 
+        parse_all (cmds) (com::acc)
+  in parse_all cmds [];;
+(*
+eval (parse a) ([],([]::[]::[]));;
+eval (parse b) ([],([]::[]::[]));;
+eval (parse c) ([],([]::[]::[]));;
+eval (parse d) ([],([]::[]::[]));;
+eval (parse e) ([],([]::[]::[]));;
+eval (parse g) ([],([]::[]::[]));;
+eval (parse h) ([],([]::[]::[]));;
+eval (parse i) ([],([]::[]::[]));;
+*)
+eval (parse k) ([],([]::[]::[]));;

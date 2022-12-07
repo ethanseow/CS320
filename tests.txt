@@ -380,3 +380,41 @@ Mut foo a
 End
 Push foo
 Quit";;
+
+used for testing begin and ifthen
+let b = "Begin
+Push 0
+IfThen
+Push 3
+Else
+Push 5
+End
+End
+Quit";;
+
+testing global and locals
+let b = "Push 55
+Global x
+Push x
+Begin
+Push 3
+Push 5
+Global x
+Push 7
+Push x
+End
+Push x
+Quit";;
+
+let b = "Push 55
+Local x
+Push x
+Begin
+Push 3
+Push 5
+Global x
+Push 7
+Push x
+End
+Push x
+Quit";;
