@@ -1098,6 +1098,7 @@ Pop
 Concat
 Quit";;
 
+(* should just be 8*)
 let o = "Fun f1 x
 Push x
 Return
@@ -1112,6 +1113,34 @@ Call
 Return
 Mut f3 x
 Push x
+Push 1
+Add
+Local x
+Push x
+Push f2
+Call
+Return
+End
+Push 3
+Push f3
+Call
+Quit";;
+
+(* error *)
+let p = "Fun f1 x
+Push y
+Return
+Mut f2 x
+Push x
+Push 2
+Mul
+Local x
+Push x
+Push f1
+Call
+Return
+Mut f3 y
+Push y
 Push 1
 Add
 Local x
@@ -1147,7 +1176,8 @@ eval (parse k) ([],([]::[]::[]));;
 eval (parse l) ([],([]::[]::[]));;
 eval (parse m) ([],([]::[]::[]));;
 eval (parse n) ([],([]::[]::[]));;
+eval (parse o) ([],([]::[]::[]));;
 *)
-match eval (parse o) ([],([]::[]::[])) with
+match eval (parse p) ([],([]::[]::[])) with
 | Ok(st,_) -> st
 | _ -> []
