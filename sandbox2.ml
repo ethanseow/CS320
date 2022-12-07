@@ -690,6 +690,13 @@ let removeLocalEnv (cl : env) : env =
 let addLocalEnv (cl : env) : env =
   List.rev ([]::(List.rev cl))
 
+let rec popN' i n stk =
+  if i == n then
+    stk
+  else
+    popN' (i+1) n (List.tl stk)
+
+let popN n stk = popN' 0 n stk
 
 let funF (cloList : const list) (prog : program) : (program, parse_err) result = 
   let (st,e) = prog
@@ -759,13 +766,7 @@ let tup (n : int) (prog : program) =
     in
     let tuple = TupleConst(List.fold_left helper [] st)
     in
-    let rec popN i n stk =
-      if i == n then
-        stk
-      else
-        popN (i+1) n (List.tl stk)
-    in
-    let newStack = tuple::(popN 0 n st)
+    let newStack = tuple::(popN n st)
     in
     ok((newStack,e))
   else
@@ -801,9 +802,11 @@ let callF (prog : program) (evalInner) =
         let funcEnv = local funcVar ([funcVarValue],(addLocalEnv e))
         in
         match funcEnv with
-        | Ok(funcEnv') -> 
-          evalInner comlist funcEnv' |> and_then @@ (fun (newS,newE) -> 
-              let newProg = ( (List.hd newS)::st, (removeLocalEnv newE) )
+        | Ok((_,e')) -> 
+          evalInner comlist ([],e') |> and_then @@ (fun (newS,newE) -> 
+              let st' = popN 2 st
+              in
+              let newProg = ( (List.hd newS)::st', (removeLocalEnv newE) )
               in
               ok(newProg)
             )
@@ -1094,6 +1097,33 @@ Swap
 Pop
 Concat
 Quit";;
+
+let o = "Fun f1 x
+Push x
+Return
+Mut f2 x
+Push x
+Push 2
+Mul
+Local x
+Push x
+Push f1
+Call
+Return
+Mut f3 x
+Push x
+Push 1
+Add
+Local x
+Push x
+Push f2
+Call
+Return
+End
+Push 3
+Push f3
+Call
+Quit";;
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
   in
@@ -1116,5 +1146,8 @@ eval (parse i) ([],([]::[]::[]));;
 eval (parse k) ([],([]::[]::[]));;
 eval (parse l) ([],([]::[]::[]));;
 eval (parse m) ([],([]::[]::[]));;
-*)
 eval (parse n) ([],([]::[]::[]));;
+*)
+match eval (parse o) ([],([]::[]::[])) with
+| Ok(st,_) -> st
+| _ -> []
