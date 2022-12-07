@@ -56,15 +56,18 @@ type parse_err =
   | NoEndStatementOnBegin
   | NoEndStatementOnIf
   | NoEndStatementOnLR
+  | EmptyStackInReturn
   | NoEndStatementOnFun
   | EndNotSkipped
   | ElseNotSkipped
   | NotEnoughForTuple
+  | EmptyStackInCall
   | Unmatched
   | MissingReturnStatement
   | MissingReturnStatementMut
   | EmptyStackOrNotTuple
   | OutsideTuple
+  | NotCallableClosure
   | NotInClosure
   | NotBooleanOrEmptyStack
   | EmptyStackInBegin
@@ -684,6 +687,8 @@ let local (v : const) (p : program) : (program, parse_err) result =
 let removeLocalEnv (cl : env) : env =
   List.rev (List.tl (List.rev cl))
 
+let addLocalEnv (cl : env) : env =
+  List.rev ([]::(List.rev cl))
 
 
 let funF (cloList : const list) (prog : program) : (program, parse_err) result = 
@@ -779,6 +784,44 @@ let getTup (n : int) (prog : program) =
     | _ -> err(EmptyStackOrNotTuple)
   else
     err(EmptyStackOrNotTuple)
+
+let callF (prog : program) (evalInner) = 
+  let (st,e) = prog
+  in
+  if List.length st >= 2 then
+    match st with
+    | clo::t ->
+      match clo with
+      | Clo(_,funcArg, comlist) ->
+        (
+        let funcVar = Var(funcArg)
+        in
+        let funcVarValue = List.nth st 1
+        in
+        let funcEnv = local funcVar ([funcVarValue],(addLocalEnv e))
+        in
+        match funcEnv with
+        | Ok(funcEnv') -> 
+          evalInner comlist funcEnv' |> and_then @@ (fun (newS,newE) -> 
+              let newProg = ( (List.hd newS)::st, (removeLocalEnv newE) )
+              in
+              ok(newProg)
+            )
+        | _ -> err(PI)
+        )
+      | _ -> err(NotCallableClosure)
+  else
+    err(EmptyStackInCall)
+
+let returnF (prog : program) =
+  let (st,e) = prog
+  in
+  match st with
+  | [] -> err(EmptyStackInReturn)
+  | h::_ -> (
+    ok(([h],e))
+  )
+
 let rec evalInner (src : com list) (prog : program): (program, parse_err) result = 
   match src with
   | [] -> ok(prog)
@@ -836,6 +879,7 @@ let rec evalInner (src : com list) (prog : program): (program, parse_err) result
   | Add -> add prog
   | Sub -> sub prog
   | Mul -> mul prog
+  | Return -> returnF prog
   | Div -> div prog
   | Swap -> swap prog
   | Neg -> neg prog
@@ -851,6 +895,7 @@ let rec evalInner (src : com list) (prog : program): (program, parse_err) result
   | Case(left,right) -> case left right evalInner prog
   | Tuple(n) -> tup n prog 
   | Get(n) -> getTup n prog
+  | Call -> callF prog evalInner
 let rec eval (src : com list) (prog : program): (program, parse_err) result = 
   match src with
   | [] -> err(NoQuitStatement)
