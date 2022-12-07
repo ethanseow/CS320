@@ -59,9 +59,12 @@ type parse_err =
   | NoEndStatementOnFun
   | EndNotSkipped
   | ElseNotSkipped
+  | NotEnoughForTuple
   | Unmatched
   | MissingReturnStatement
   | MissingReturnStatementMut
+  | EmptyStackOrNotTuple
+  | OutsideTuple
   | NotInClosure
   | NotBooleanOrEmptyStack
   | EmptyStackInBegin
@@ -738,6 +741,44 @@ let case (left : com list) (right : com list) (evalInner) (prog : program) =
   else
     err(EmptyStackInCase)
 
+
+let tup (n : int) (prog : program) =
+  let (st,e) = prog
+  in
+  if List.length st >= n then
+    let helper acc h = 
+      if List.length acc < n then
+        h::acc
+      else
+        acc
+    in
+    let tuple = TupleConst(List.fold_left helper [] st)
+    in
+    let rec popN i n stk =
+      if i == n then
+        stk
+      else
+        popN (i+1) n (List.tl stk)
+    in
+    let newStack = tuple::(popN 0 n st)
+    in
+    ok((newStack,e))
+  else
+    err(NotEnoughForTuple)
+
+let getTup (n : int) (prog : program) = 
+  let (st,e) = prog
+  in
+  if (stackHasElem st) then
+    match List.hd st with
+    | TupleConst(cl) -> 
+      if (List.length cl) - 1 >= n then
+        ok(((List.nth cl n)::st, e))
+      else
+        err(OutsideTuple)
+    | _ -> err(EmptyStackOrNotTuple)
+  else
+    err(EmptyStackOrNotTuple)
 let rec evalInner (src : com list) (prog : program): (program, parse_err) result = 
   match src with
   | [] -> ok(prog)
@@ -808,6 +849,8 @@ let rec evalInner (src : com list) (prog : program): (program, parse_err) result
   | InjL -> injl prog
   | InjR -> injr prog
   | Case(left,right) -> case left right evalInner prog
+  | Tuple(n) -> tup n prog 
+  | Get(n) -> getTup n prog
 let rec eval (src : com list) (prog : program): (program, parse_err) result = 
   match src with
   | [] -> err(NoQuitStatement)
@@ -978,6 +1021,34 @@ Push \"Bob\"
 Concat
 End
 Quit"
+
+(* should be tulpe of 1 two 3*)
+let l = "Push 1
+Push \"two\"
+Push 3
+Tuple 3
+Quit";;
+
+(* should be tuple(clo,5) 20*)
+let m = "Fun bar x
+Return
+End
+Push 20
+Push bar
+Push 5
+Tuple 2
+Quit";;
+
+let n = "Push \"there\"
+Push \"hi\"
+Tuple 2
+Get 0
+Swap
+Get 1
+Swap
+Pop
+Concat
+Quit";;
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
   in
@@ -997,5 +1068,8 @@ eval (parse e) ([],([]::[]::[]));;
 eval (parse g) ([],([]::[]::[]));;
 eval (parse h) ([],([]::[]::[]));;
 eval (parse i) ([],([]::[]::[]));;
-*)
 eval (parse k) ([],([]::[]::[]));;
+eval (parse l) ([],([]::[]::[]));;
+eval (parse m) ([],([]::[]::[]));;
+*)
+eval (parse n) ([],([]::[]::[]));;
