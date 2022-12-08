@@ -215,7 +215,7 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
     | "Neg" -> ok((Neg,t))
     | "End" -> err(EndNotSkipped)
     | "Else" -> err(ElseNotSkipped)
-    | "Return" -> err(NotInClosure)
+    | "Return" -> ok((Return,t))
     | "And" -> ok((And,t))
     | "InjL" -> ok((InjL,t))
     | "InjR" -> ok((InjR,t))
@@ -274,9 +274,6 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
       | "Return" ->
         find_fun t (Return::acc) cloAcc
       | "End" -> 
-        if List.length acc = 0 || ((List.hd acc) <> Return) then
-          err(MissingReturnStatement)
-        else
           let Clo(prevCloHeader,prevCloArg,_) = List.hd cloAcc 
           in
           let newRealClo = Clo(prevCloHeader,prevCloArg, (List.rev acc))
@@ -285,9 +282,6 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
           in
           ok( (newCloAcc  ,t) )
       | "Mut" -> 
-        if List.length acc = 0 || ((List.hd acc) <> Return) then
-          err(MissingReturnStatementMut)
-        else
           let Clo(prevCloHeader,prevCloArg,_) = List.hd cloAcc 
           in
           let newRealClo = Clo(prevCloHeader,prevCloArg,(List.rev acc))
@@ -800,7 +794,10 @@ let callF (prog : program) (evalInner) =
         in
         let funcVarValue = List.nth st 1
         in
-        let funcEnv = local funcVar ([funcVarValue],(addLocalEnv e))
+        (* new env of just global and an empty local for the function *)
+        let funcEnv' = (List.hd e)::[]::[]::[]
+        in
+        let funcEnv = local funcVar ([funcVarValue],(funcEnv'))
         in
         match funcEnv with
         | Ok((_,e')) -> 
@@ -808,7 +805,7 @@ let callF (prog : program) (evalInner) =
               (* st contains the closure and argument *)
               let st' = popN 2 st
               in
-              let newProg = ( (List.nth newS 1)::st', (removeLocalEnv newE) )
+              let newProg = ( (List.nth newS 1)::st', ((List.hd newE)::(List.tl e)) )
               in
               ok(newProg)
             )
@@ -1179,6 +1176,7 @@ Push f3
 Call
 Quit";;
 
+(* 11 22 tuple*)
 let q = "Fun regular x
 Push 11
 Push x
@@ -1190,18 +1188,58 @@ Push regular
 Call
 Quit";;
 
-let test = "Push 3
+(* 46 *)
+let r = "Fun odd x
+Push x
+Push 2
+Mul
+Local x
+Push x
+Push 46
+Equal
+IfThen
+Push x
+Return
+Else
+Push x
+Push even
+Call
+Return
+End
+Mut even x
+Push 1
+Push x
+Add
+Local x
+Push x
+Push odd
+Call
+Return
+End
+Push 5
+Push odd
+Call
+Quit";;
+
+let test = "Fun f1 x
+Push x
 Push 1
 IfThen
-Push 4
-Begin
 Push 1
-Quit
+IfThen
+Return
+Else
 End
 Else
 End
+End
+Push 3
+Push f1
+Call
 Quit
-Push 2";;
+Quit";;
+
+
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
   in
@@ -1226,8 +1264,8 @@ eval (parse l) ([],([]::[]::[]));;
 eval (parse m) ([],([]::[]::[]));;
 eval (parse n) ([],([]::[]::[]));;
 eval (parse o) ([],([]::[]::[]));;
-eval (parse p) ([],([]::[]::[]));; <- returns 3 - 
+eval (parse p) ([],([]::[]::[]));; <- returns 3 - need to fix traversal of push
 *) 
-match eval (parse p) ([],([]::[]::[])) with
+match eval (parse o) ([],([]::[]::[])) with
 | Ok(st,_) -> st
 | _ -> []
