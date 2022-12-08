@@ -8,6 +8,8 @@
   | String of string
   | Var of string
   | Clo of (string * string * com list)
+  (* mutclo contains the other mutually rec closures and is applied to funf*)
+  | MutClo of (string * string * com list * (unit -> (string * const) list))
   | Left of const 
   | Right of const
   | TupleConst of (const list)
@@ -702,13 +704,20 @@ let funF (cloList : const list) (prog : program) : (program, parse_err) result =
     | Err(_) -> err(PI)
     | Ok((_,newE)) -> ok(st,newE) 
   else
+  let restOfMut = (fun () -> (
+    match funF cloList ([],[]) with
+    | Err(_) -> []
+    | Ok((_,newE)) -> (List.hd (List.rev newE))
+  ))
   (* put all functions into local env *)
   let helper (acc : env) (clo : const) : env = 
     match clo with
-    | Clo(funcName, _, _) -> 
+    | Clo(funcName, funcArg, commands) -> 
       let vari = Var(funcName)
       in
-      let updatedE = (local vari ((clo::[]),acc))
+      let newClo = MutClo(funcName,funcArg, commands, restOfMut)
+      in
+      let updatedE = (local vari ((newClo::[]),acc))
       in
       match updatedE with
       (* impossible to have error *)
@@ -791,12 +800,7 @@ let getTup (n : int) (prog : program) =
 let callF (prog : program) (evalInner) = 
   let (st,e) = prog
   in
-  if List.length st >= 2 then
-    match st with
-    | clo::t ->
-      match clo with
-      | MutClo -> failwith "unimplemented"
-      | Clo(_,funcArg, comlist) ->
+  let helper funcArg comlist st e = 
         (
         let funcVar = Var(funcArg)
         in
@@ -819,6 +823,18 @@ let callF (prog : program) (evalInner) =
             )
         | _ -> err(PI)
         )
+  (* helper does not need to know about t or clo, we can move it outside*)
+  in
+  if List.length st >= 2 then
+    match st with
+    | clo::t ->
+      match clo with
+      | MutClo(_,funcArg,comlist, otherClosures) -> 
+        (* inside of a func only head *)
+        let newE = ([], ((List.hd e)::(otherClosures())::[]) )
+        in
+        helper funcArg comlist st newE
+      | Clo(_,funcArg, comlist) -> helper funcArg comList st e 
       | _ -> err(NotCallableClosure)
   else
     err(EmptyStackInCall)
