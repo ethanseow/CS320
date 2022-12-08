@@ -80,7 +80,7 @@ type parse_err =
   | EmptyStackInInjr
   | PI
   | NoQuitStatement
-  | VariableNotFound
+  | VariableNotFound of (const * env)
 type result_out = ((com list) * program)
 let fold_result (f : 'a -> 'b) (g : 'e -> 'b) (res : ('a, 'e) result): 'b =
   match res with
@@ -633,7 +633,7 @@ let push (x : const) (p : program) : (program, parse_err) result =
           | Some x -> (Some(x))
       in
       match trav n e with
-      | None -> err(VariableNotFound)
+      | None -> err(VariableNotFound(x,e))
       | Some x -> ok((x::st),e)
       )
 let updateEnv (vari : string) (toChange : const) (e : env) (index : int) : env = 
@@ -696,6 +696,12 @@ let popN n stk = popN' 0 n stk
 let funF (cloList : const list) (prog : program) : (program, parse_err) result = 
   let (st,e) = prog
   in
+  if List.length cloList = 1 then
+    (* only one function - not mut *)
+    match (local vari ([List.hd cloList],e))
+    | Err(_) -> err(PI)
+    | Ok((_,newE)) -> ok(st,newE) 
+  else
   (* put all functions into local env *)
   let helper (acc : env) (clo : const) : env = 
     match clo with
@@ -705,6 +711,7 @@ let funF (cloList : const list) (prog : program) : (program, parse_err) result =
       let updatedE = (local vari ((clo::[]),acc))
       in
       match updatedE with
+      (* impossible to have error *)
       | Err(_) -> []
       | Ok((_,newE)) -> newE 
     | _ -> []
@@ -788,6 +795,7 @@ let callF (prog : program) (evalInner) =
     match st with
     | clo::t ->
       match clo with
+      | MutClo -> failwith "unimplemented"
       | Clo(_,funcArg, comlist) ->
         (
         let funcVar = Var(funcArg)
@@ -1223,20 +1231,22 @@ Quit";;
 
 let test = "Fun f1 x
 Push x
-Push 1
-IfThen
-Push 1
-IfThen
+Push 2
+Add
+Local x
+Push x
+Push f2
+Call
 Return
-Else
-End
-Else
-End
+Mut f2 x
+Push x
+Push \"thisis\"
+Concat
+Return
 End
 Push 3
 Push f1
 Call
-Quit
 Quit";;
 
 
