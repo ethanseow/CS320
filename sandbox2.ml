@@ -707,7 +707,7 @@ let rec funF (cloList : const list) (prog : program) : (program, parse_err) resu
     | Ok((_,newE)) -> ok(st,newE) 
   else (
   let restOfMut = (fun () -> (
-    match funF cloList ([],[]) with
+    match funF cloList ([],[]::[]) with
     | Err(_) -> []
     | Ok((_,newE)) -> (List.hd (List.rev newE))
   ))
@@ -809,10 +809,8 @@ let callF (prog : program) (evalInner) =
         in
         let funcVarValue = List.nth st 1
         in
-        (* new env of just global and an empty local for the function *)
-        let funcEnv' = (List.hd e)::[]::[]::[]
-        in
-        let funcEnv = local funcVar ([funcVarValue],(funcEnv'))
+        (* new env of just global and an empty local for the function with mut bindings *)
+        let funcEnv = local funcVar ([funcVarValue],e)
         in
         match funcEnv with
         | Ok((_,e')) -> 
@@ -1254,6 +1252,14 @@ Push 2
 Add
 Local x
 Push x
+Push f2
+Call
+Return
+Mut f2 x
+Push x
+Push 3
+Add
+Return
 End
 Push 3
 Push f1
@@ -1287,6 +1293,13 @@ eval (parse n) ([],([]::[]::[]));;
 eval (parse o) ([],([]::[]::[]));;
 eval (parse p) ([],([]::[]::[]));; <- returns 3 - need to fix traversal of push
 *) 
-match eval (parse test) ([],([]::[]::[])) with
+
+(*
+let out = match eval (parse test) ([],([]::[]::[])) with
 | Ok(st,_) -> st
-| _ -> []
+| _ -> [];;
+
+let c = List.nth out 0;;
+
+let MutClo(_,_,_,f) = c;;
+*)
