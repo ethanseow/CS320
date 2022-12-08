@@ -12,6 +12,7 @@
   | Right of const
   | TupleConst of (const list)
   | QuitConst
+  | ReturnConst
   and com = 
   | Quit
   | Get of int
@@ -804,9 +805,10 @@ let callF (prog : program) (evalInner) =
         match funcEnv with
         | Ok((_,e')) -> 
           evalInner comlist ([],e') |> and_then @@ (fun (newS,newE) -> 
+              (* st contains the closure and argument *)
               let st' = popN 2 st
               in
-              let newProg = ( (List.hd newS)::st', (removeLocalEnv newE) )
+              let newProg = ( (List.nth newS 1)::st', (removeLocalEnv newE) )
               in
               ok(newProg)
             )
@@ -822,22 +824,43 @@ let returnF (prog : program) =
   match st with
   | [] -> err(EmptyStackInReturn)
   | h::_ -> (
-    ok(([h],e))
+    (* used to bubble up return if inside begin/ifth *)
+    ok((ReturnConst::h::[],e))
   )
 
 let rec evalInner (src : com list) (prog : program): (program, parse_err) result = 
   match src with
   | [] -> ok(prog)
   | h::t -> (
-    if h = Quit then
-      let (st,e) = prog
-      in
+    let (st,e) = prog
+    in
+    match h with
+    | Quit ->
+      (* used to quit if quit is inside begin/end*)
       let newSt = QuitConst::st
       in
       ok((newSt,e))
-    else
-      eval_all src prog |> and_then @@ fun newProg ->
-        evalInner t newProg
+    | Return -> 
+      (* used to bubble up return if return is inside begin/ift *)
+      if List.length st > 0 then
+        let newSt = ReturnConst::(List.hd st)::[]
+        in
+        (* ok in evalInner/eval exits out of current com list *)
+        ok ((newSt,e))
+      else
+        err(EmptyStackInReturn)
+    | _ -> eval_all src prog |> and_then @@ fun newProg ->
+        let (st,e) = newProg
+        in
+        match st with
+        | h::_ ->
+          (
+            match h with
+          | QuitConst -> ok((st,e))
+          | ReturnConst -> ok((st,e))
+          | _ -> evalInner t newProg
+          )
+        | _ -> evalInner t newProg
   )
   and eval_all (src : com list) (prog : program) : (program, parse_err) result = 
   let (st,e) = prog
@@ -882,7 +905,6 @@ let rec evalInner (src : com list) (prog : program): (program, parse_err) result
   | Add -> add prog
   | Sub -> sub prog
   | Mul -> mul prog
-  | Return -> returnF prog
   | Div -> div prog
   | Swap -> swap prog
   | Neg -> neg prog
@@ -903,9 +925,11 @@ let rec eval (src : com list) (prog : program): (program, parse_err) result =
   match src with
   | [] -> err(NoQuitStatement)
   | h::t -> (
-    if h = Quit then
-      ok(prog)
-    else
+    match h with 
+    | Quit -> ok(prog)
+    | Return -> err(NotInClosure)
+    | _ ->
+      (* quit const bubbles up *)
       eval_all src prog |> and_then @@ (fun newProg ->
         let (st,e) = newProg
         in
@@ -914,6 +938,7 @@ let rec eval (src : com list) (prog : program): (program, parse_err) result =
           (
             match h with
           | QuitConst -> ok(( (List.tl st) , e))
+          | ReturnConst -> err(NotInClosure)
           | _ -> eval t newProg
           )
         | _ -> eval t newProg)
@@ -1153,6 +1178,30 @@ Push 3
 Push f3
 Call
 Quit";;
+
+let q = "Fun regular x
+Push 11
+Push x
+Tuple 2
+Return
+End
+Push 22
+Push regular
+Call
+Quit";;
+
+let test = "Push 3
+Push 1
+IfThen
+Push 4
+Begin
+Push 1
+Quit
+End
+Else
+End
+Quit
+Push 2";;
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
   in
@@ -1177,7 +1226,8 @@ eval (parse l) ([],([]::[]::[]));;
 eval (parse m) ([],([]::[]::[]));;
 eval (parse n) ([],([]::[]::[]));;
 eval (parse o) ([],([]::[]::[]));;
-*)
+eval (parse p) ([],([]::[]::[]));; <- returns 3 - 
+*) 
 match eval (parse p) ([],([]::[]::[])) with
 | Ok(st,_) -> st
 | _ -> []
