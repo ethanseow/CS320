@@ -214,7 +214,7 @@ let rec stringToCom (cmds : string list): ((com * string list), parse_err) resul
     | "Neg" -> ok((Neg,t))
     | "End" -> err(EndNotSkipped)
     | "Else" -> err(ElseNotSkipped)
-    | "Return" -> err(NotInClosure)
+    | "Return" -> ok((Return,t))
     | "And" -> ok((And,t))
     | "InjL" -> ok((InjL,t))
     | "InjR" -> ok((InjR,t))
@@ -626,20 +626,16 @@ let push (x : const) (p : program) : (program, parse_err) result =
       ok(newProgram)
   | Var v -> 
       (
+        (* n is local env, 0 is local env*)
       let n = (List.length e) - 1
       in
-      let rec trav (i : int) (e : env) = 
-        if i < 0
-          then
-            None
-        else
-          match findVar v e i with
-          | None -> trav (i-1) e
-          | Some x -> (Some(x))
-      in
-      match trav n e with
-      | None -> err(VariableNotFound)
-      | Some x -> ok((x::st),e)
+      match findVar v e n with
+      | None ->
+        (match findVar v e 0 with 
+        | None -> err(VariableNotFound)
+        | Some x -> ok(((x::st),e))
+        )
+      | Some x -> ok(((x::st),e))
       )
 let updateEnv (vari : string) (toChange : const) (e : env) (index : int) : env = 
     let (_, newEnv) = List.fold_left (fun acc h -> 
@@ -1153,6 +1149,64 @@ Push 3
 Push f3
 Call
 Quit";;
+
+(* tuple of 11,22 *)
+let q = "Fun regular x
+Push 11
+Push x
+Tuple 2
+Return
+End
+Push 22
+Push regular
+Call
+Quit";;
+
+(* 46 *)
+let r = "Fun odd x
+Push x
+Push 2
+Mul
+Local x
+Push x
+Push 46
+Equal
+IfThen
+Push x
+Return
+Else
+Push x
+Push even
+Call
+Return
+End
+Mut even x
+Push 1
+Push x
+Add
+Local x
+Push x
+Push odd
+Call
+Return
+End
+Push 5
+Push odd
+Call
+Quit";;
+
+
+let test = "Fun f1 x
+Push 1
+IfThen
+Push 3
+Return
+Else
+Push 4
+Return
+End
+End
+Quit";;
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
   in
@@ -1177,7 +1231,9 @@ eval (parse l) ([],([]::[]::[]));;
 eval (parse m) ([],([]::[]::[]));;
 eval (parse n) ([],([]::[]::[]));;
 eval (parse o) ([],([]::[]::[]));;
+eval (parse p) ([],([]::[]::[]));;
+eval (parse q) ([],([]::[]::[]));;
 *)
-match eval (parse p) ([],([]::[]::[])) with
+match eval (parse o) ([],([]::[]::[])) with
 | Ok(st,_) -> st
 | _ -> []
