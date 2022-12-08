@@ -4,6 +4,7 @@
   Init Types   
 *)
   type const = 
+  | FatalError
   | Int of int
   | String of string
   | Var of string
@@ -966,6 +967,41 @@ let rec eval (src : com list) (prog : program): (program, parse_err) result =
         | _ -> eval t newProg)
   )
 
+let rec stackToFile (st : const list) (delim : string): string list = 
+  let helper acc h : string list = 
+    let out = (match h with 
+    | Int i -> string_of_int i
+    | String s -> s
+    | MutClo(funcName,funcArg,_,_) -> 
+      "Clo (" ^ funcName ^ " " ^ funcArg ^ ")"
+    | Clo(funcName,funcArg,_) -> 
+      "Clo (" ^ funcName ^ " " ^ funcArg ^ ")"
+    | Left(c) -> "Left " ^ (List.hd (stackToFile [c] delim))
+    | Right(c) -> "Right " ^ (List.hd (stackToFile [c] delim))
+    | TupleConst(c) -> (
+      let rec helper acc h = acc ^ h ^ ", "
+      in
+      let tuplized = List.fold_left helper "(" (stackToFile c "")
+      in
+      String.sub tuplized 0 ((String.length tuplized) - 2) ^ ")"
+      ))
+    
+    in
+    (out ^ delim)::acc
+  in
+  List.rev (List.fold_left helper [] st)
+let printToFile (inp : string list) (file_path : string) : unit = 
+  let fp = open_out file_path in
+  let lekunga = (String.concat "\n" inp)
+  in
+  let () = Printf.fprintf fp "%s" lekunga in
+    close_out fp
+
+let interpreter (src: string) (output_file_path : string) = 
+  match eval (parse src) ([],([]::[]::[])) with
+  | Ok(st,_) -> (printToFile (stackToFile st "\n") output_file_path)
+  | _ -> printToFile ("Error"::[]) (output_file_path);;
+
 let b = "Push 55
 Local x
 Push x
@@ -1246,6 +1282,78 @@ Push odd
 Call
 Quit";;
 
+
+(* 6 *)
+let s = "Fun numOfStepsToOne x
+Push numOfSteps
+Push 1
+Add
+Global numOfSteps
+Push x
+Push 1
+Add
+Local x
+Push x
+Push divideByTwo
+Call
+Return
+Mut divideByTwo x
+Push numOfSteps
+Push 1
+Add
+Global numOfSteps
+Push 2
+Push x
+Div
+Local x
+Push x
+Push 1
+Equal
+IfThen
+Push numOfSteps
+Return
+Else
+Push x
+Push numOfStepsToOne
+Call
+Return
+End
+End
+Push 0
+Global numOfSteps
+Push 5
+Push numOfStepsToOne
+Call
+Quit"
+
+
+(* 100 *)
+let t = "Fun snack laddoo
+Push laddoo
+Push 100
+Mul
+Local cal
+Push cal
+Push calories
+Call
+Return
+Mut calories cal
+Push 9
+Push cal
+Div
+Local g
+Push g
+Push sugar
+Call
+Return
+Mut sugar g
+Push g
+Return
+End
+Push 9
+Push snack
+Call
+Quit";;
 let test = "Fun f1 x
 Push x
 Push 2
