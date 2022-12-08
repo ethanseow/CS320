@@ -695,20 +695,23 @@ let rec popN' i n stk =
 
 let popN n stk = popN' 0 n stk
 
-let funF (cloList : const list) (prog : program) : (program, parse_err) result = 
+let rec funF (cloList : const list) (prog : program) : (program, parse_err) result = 
   let (st,e) = prog
   in
   if List.length cloList = 1 then
+    let Clo(funcName,_,_) = List.hd cloList
+    in
     (* only one function - not mut *)
-    match (local vari ([List.hd cloList],e))
+    match (local (Var(funcName)) ([List.hd cloList],e)) with
     | Err(_) -> err(PI)
     | Ok((_,newE)) -> ok(st,newE) 
-  else
+  else (
   let restOfMut = (fun () -> (
     match funF cloList ([],[]) with
     | Err(_) -> []
     | Ok((_,newE)) -> (List.hd (List.rev newE))
   ))
+  in
   (* put all functions into local env *)
   let helper (acc : env) (clo : const) : env = 
     match clo with
@@ -727,7 +730,7 @@ let funF (cloList : const list) (prog : program) : (program, parse_err) result =
   in
   let addedFunToEnv = List.fold_left helper e cloList  
   in
-  ok((st,addedFunToEnv))
+  ok((st,addedFunToEnv)) )
     
 
 let injl (prog : program) : (program, parse_err) result = 
@@ -831,10 +834,10 @@ let callF (prog : program) (evalInner) =
       match clo with
       | MutClo(_,funcArg,comlist, otherClosures) -> 
         (* inside of a func only head *)
-        let newE = ([], ((List.hd e)::(otherClosures())::[]) )
+        let newE : env = ((List.hd e)::(otherClosures())::[])
         in
         helper funcArg comlist st newE
-      | Clo(_,funcArg, comlist) -> helper funcArg comList st e 
+      | Clo(_,funcArg, comlist) -> helper funcArg comlist st e 
       | _ -> err(NotCallableClosure)
   else
     err(EmptyStackInCall)
@@ -1251,14 +1254,6 @@ Push 2
 Add
 Local x
 Push x
-Push f2
-Call
-Return
-Mut f2 x
-Push x
-Push \"thisis\"
-Concat
-Return
 End
 Push 3
 Push f1
@@ -1292,6 +1287,6 @@ eval (parse n) ([],([]::[]::[]));;
 eval (parse o) ([],([]::[]::[]));;
 eval (parse p) ([],([]::[]::[]));; <- returns 3 - need to fix traversal of push
 *) 
-match eval (parse o) ([],([]::[]::[])) with
+match eval (parse test) ([],([]::[]::[])) with
 | Ok(st,_) -> st
 | _ -> []
