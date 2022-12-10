@@ -699,14 +699,6 @@ let popN n stk = popN' 0 n stk
 let rec funF (cloList : const list) (prog : program) : (program, parse_err) result = 
   let (st,e) = prog
   in
-  if List.length cloList = 1 then
-    let Clo(funcName,_,_) = List.hd cloList
-    in
-    (* only one function - not mut *)
-    match (local (Var(funcName)) ([List.hd cloList],e)) with
-    | Err(_) -> err(PI)
-    | Ok((_,newE)) -> ok(st,newE) 
-  else (
   let restOfMut = (fun () -> (
     match funF cloList ([],[]::[]) with
     | Err(_) -> []
@@ -731,7 +723,7 @@ let rec funF (cloList : const list) (prog : program) : (program, parse_err) resu
   in
   let addedFunToEnv = List.fold_left helper e cloList  
   in
-  ok((st,addedFunToEnv)) )
+  ok((st,addedFunToEnv))
     
 
 let injl (prog : program) : (program, parse_err) result = 
@@ -802,7 +794,7 @@ let getTup (n : int) (prog : program) =
     err(EmptyStackOrNotTuple)
 
 let callF (prog : program) (evalInner) = 
-  let (st,e) = prog
+  let (st,topE) = prog
   in
   let helper funcArg comlist st e = 
         (
@@ -819,7 +811,7 @@ let callF (prog : program) (evalInner) =
               (* st contains the closure and argument *)
               let st' = popN 2 st
               in
-              let newProg = ( (List.nth newS 1)::st', ((List.hd newE)::(List.tl e)) )
+              let newProg = ( (List.nth newS 1)::st', ((List.hd newE)::(List.tl topE)) )
               in
               ok(newProg)
             )
@@ -833,10 +825,9 @@ let callF (prog : program) (evalInner) =
       match clo with
       | MutClo(_,funcArg,comlist, otherClosures) -> 
         (* inside of a func only head *)
-        let newE : env = ((List.hd e)::(otherClosures())::[])
+        let newE : env = ((List.hd topE)::(otherClosures())::[])
         in
         helper funcArg comlist st newE
-      | Clo(_,funcArg, comlist) -> helper funcArg comlist st []
       | _ -> err(NotCallableClosure)
   else
     err(EmptyStackInCall)
@@ -1407,6 +1398,71 @@ Push 4
 Push mystery1
 Call
 Quit"
+
+let test4 = "Push 1
+Push 3
+Tuple 0
+Quit"
+
+let test5 = "Fun loop n
+Push 0
+Push n
+Equal
+IfThen
+Tuple 0
+Return
+Else
+Push 1
+Push n
+Sub
+Push loop
+Call
+Push n
+Tuple 2
+Return
+End
+End
+Push 5
+Push loop
+Call
+Quit";;
+
+let test6 = "Fun add n
+Push 0
+Push n
+Lte
+IfThen
+Push n
+Return
+Else
+Push 1
+Push n
+Sub
+Push add
+Call
+End
+Push n
+Tuple 2
+Return
+End
+Push 3
+Push add
+Call
+Quit";;
+
+let test7 = "Push 5
+Local x
+Fun plus n
+Push n
+Push 1
+Add
+Return
+End
+Push x
+Push plus
+Call
+Push x
+Quit";;
 
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
