@@ -836,7 +836,7 @@ let callF (prog : program) (evalInner) =
         let newE : env = ((List.hd e)::(otherClosures())::[])
         in
         helper funcArg comlist st newE
-      | Clo(_,funcArg, comlist) -> helper funcArg comlist st e 
+      | Clo(_,funcArg, comlist) -> helper funcArg comlist st []
       | _ -> err(NotCallableClosure)
   else
     err(EmptyStackInCall)
@@ -1387,6 +1387,26 @@ Right
 Push 5
 Add
 End";;
+
+let test3 = "Push \"ManyFuns\"
+Fun mystery1 x
+Push x
+Push mystery2
+Call
+Push 2
+Mul
+Return
+End
+Fun mystery2 x
+Push x
+Push 1
+Add
+Return
+End
+Push 4
+Push mystery1
+Call
+Quit"
 
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
