@@ -973,9 +973,9 @@ let rec stackToFile (st : const list) (delim : string): string list =
     | Int i -> string_of_int i
     | String s -> s
     | MutClo(funcName,funcArg,_,_) -> 
-      "Clo (" ^ funcName ^ " " ^ funcArg ^ ")"
+      "Clo (" ^ funcName ^ ", " ^ funcArg ^ ")"
     | Clo(funcName,funcArg,_) -> 
-      "Clo (" ^ funcName ^ " " ^ funcArg ^ ")"
+      "Clo (" ^ funcName ^ ", " ^ funcArg ^ ")"
     | Left(c) -> "Left " ^ (List.hd (stackToFile [c] delim))
     | Right(c) -> "Right " ^ (List.hd (stackToFile [c] delim))
     | TupleConst(c) -> (
@@ -999,8 +999,11 @@ let printToFile (inp : string list) (file_path : string) : unit =
 
 let interpreter (src: string) (output_file_path : string) = 
   match eval (parse src) ([],([]::[]::[])) with
-  | Ok(st,_) -> (printToFile (stackToFile st "\n") output_file_path)
-  | _ -> printToFile ("Error"::[]) (output_file_path);;
+  | Ok(st,_) -> (printToFile (stackToFile st "") output_file_path)
+  | Err(e) ->
+    match e with
+    | NoQuitStatement -> printToFile (""::[]) (output_file_path)
+    | _ -> printToFile ("\"Error\""::[]) (output_file_path);;
 
 let b = "Push 55
 Local x
@@ -1374,6 +1377,16 @@ Push f1
 Call
 Quit";;
 
+
+let test2 = "Push 3
+InjR
+CaseLeft
+Push 4
+Add
+Right
+Push 5
+Add
+End";;
 
 let parse2 (src : string) = 
   let cmds = String.split_on_char '\n' src
